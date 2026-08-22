@@ -1,0 +1,258 @@
+# BikeRyde — Design & Spec Document (Native Android / Kotlin)
+
+A personal motorbike ride tracker: single & multi-day ride tracking, Strava-style graphics,
+animated multi-day trip videos, fuel logging, and AI-assisted ride planning. Local-first,
+no backend, no hosting cost. Native Android app built in Kotlin.
+
+---
+
+## 1. Goals & non-goals
+
+**Goals**
+- Track rides (single day and multi day) with manual, user-controlled start/pause/end actions
+- Generate a static image or animated video for any ride, single or multi day
+- Multi-day videos show route, distance, time on road, and named stops (city/place)
+- Manual fuel log (odo, liters, cost) with mileage/cost trends
+- AI-assisted planning (weather, food/sightseeing/lodging suggestions) using local or cloud model
+- Zero backend, zero hosting cost — local storage + optional user-owned Google Drive sync
+- User brings their own API keys; app never holds or proxies shared credentials
+
+**Non-goals (v1)**
+- No multi-user backend, no shared/default API keys, no app-level login/SSO
+- No custom turn-by-turn navigation — hands off to Google Maps for actual navigation
+- No iOS or web build — Android only
+- No social feed / follower features — exports go to Instagram manually
+
+---
+
+## 2. High-level architecture
+
+```
+┌───────────────────────────────────────────────────────────┐
+│  BikeRyde — native Android app (Kotlin, Jetpack Compose)   │
+│                                                             │
+│  ┌────────────────┐   ┌────────────────┐                  │
+│  │ GPS tracking    │   │ Render engine   │                  │
+│  │ FusedLocation-  │   │ MediaCodec /    │                  │
+│  │ ProviderClient  │   │ Media3          │                  │
+│  │ + ForegroundSvc │   │ Transformer     │                  │
+│  └────────┬────────┘   └────────┬────────┘                  │
+│           v                     v                            │
+│  ┌─────────────────────────────────────────┐                 │
+│  │ Local storage                            │                 │
+│  │ Room (SQLite) — structured data          │                 │
+│  │ App-scoped storage — photos, video       │                 │
+│  └───────────────────┬───────────────────────┘                │
+│                       │                                       │
+│  ┌─────────────────────────────────────────┐                 │
+│  │ Ride planner                             │                 │
+│  │ MediaPipe LLM Inference (Gemma, local)   │                 │
+│  │ or cloud AI API (toggle)                 │                 │
+│  └───────────────────┬───────────────────────┘                │
+└──────────────────────┼──────────────────────────────────────┘
+                        │
+     ┌──────────────────┼──────────────────┬──────────────────┐
+     v                   v                  v                  v
+Google Drive API   Weather/Places API   Maps SDK for      Cloud AI API
+(optional sync,     (BYO key or free    Android (preview  (BYO key,
+ user's account)     tier)               only, BYO key)    optional)
+                                          │
+                                          v
+                                   Intent → Google Maps app
+                                   (actual turn-by-turn nav)
+```
+
+No backend server anywhere — every external call is made directly from the device using the
+user's own credentials, and native Android APIs are used directly with no cross-platform bridge.
+
+---
+
+## 3. Tech stack
+
+| Layer | Choice | Notes |
+|---|---|---|
+| Language | Kotlin | Java fully interoperable if ever needed |
+| UI | Jetpack Compose | Modern declarative UI, replaces XML layouts |
+| Architecture pattern | MVVM (ViewModel + StateFlow) | Standard, testable, works cleanly with Compose |
+| Dependency injection | Hilt | Reduces boilerplate for repositories/use cases |
+| Local structured data | Room (SQLite) | Rides, GPS points, fuel logs, settings |
+| Local blobs | App-scoped internal storage (`filesDir`) | Photos, rendered videos, cached geocode results |
+| Background GPS | `FusedLocationProviderClient` + `ForegroundService` | Persistent notification while tracking, per Android background-location requirements |
+| Video rendering | `MediaCodec` / Media3 Transformer (hardware-accelerated) | Target 1080p60, fallback 1080p30 on devices without hardware support |
+| Local AI | MediaPipe LLM Inference API (Gemma) | First-class Kotlin support, on-device |
+| Cloud AI (optional) | Retrofit/OkHttp client to Claude API (or user's chosen provider) | BYO key, toggle in settings |
+| Weather | Open-Meteo (free, no key) or BYO key provider | Retrofit client |
+| Places / geocoding | OpenStreetMap Nominatim/Overpass (free) or BYO Google Places key | |
+| Maps (preview) | Google Maps SDK for Android, BYO key | Preview/planning only, not navigation |
+| Navigation handoff | Explicit `Intent` to Google Maps app | No Navigation SDK cost |
+| Cloud sync (optional) | Google Drive REST API via Google Identity Services | File-scope OAuth, not app login |
+| Notifications | `NotificationCompat`, `WorkManager` for background render jobs | |
+| Networking | Retrofit + OkHttp | |
+| Async | Kotlin Coroutines + Flow | |
+| Image loading | Coil | |
+| Charts (fuel trends) | Vico or custom Compose canvas charts | |
+
+---
+
+## 4. Data model (Room entities)
+
+**Ride**
+```
+id, type (SINGLE_DAY | MULTI_DAY), title, createdAt,
+startTime, endTime, status (PLANNED | TRACKING | COMPLETED),
+totalDistanceKm, totalDurationS, coverPhotoId
+```
+
+**RideDay** (one row per day; a single-day ride has exactly one)
+```
+id, rideId, dayIndex, startTime, endTime,
+startPlaceName, endPlaceName, distanceKm, durationS
+```
+
+**Stop** (from explicit start/pause/end user actions)
+```
+id, rideDayId, action (START | PAUSE | END), timestamp, lat, lng, placeName
+```
+
+**GpsPoint**
+```
+id, rideDayId, timestamp, lat, lng, elevation, speed
+```
+
+**FuelLog**
+```
+id, timestamp, odoKm, litersFilled, cost, pricePerLiter (derived),
+mileageSinceLast (derived), notes
+```
+
+**Photo**
+```
+id, rideId, filePath, timestamp, lat, lng (optional), usedAsBackground (Boolean)
+```
+
+**Render**
+```
+id, rideId, type (IMAGE | VIDEO), status (QUEUED | PROCESSING | DONE | FAILED),
+resolution, fps, filePath, createdAt
+```
+
+**RidePlan**
+```
+id, title, destination, dateRangeStart, dateRangeEnd, weatherSnapshot (JSON),
+suggestions (JSON: food/sightseeing/lodging), generatedBy (LOCAL | CLOUD)
+```
+
+**AppSettings** (DataStore, not Room, for key-value settings)
+```
+apiKeys (weather, places, maps, aiCloud) — stored via EncryptedSharedPreferences,
+aiMode (LOCAL | CLOUD), driveSyncEnabled (Boolean), units (KM | MI)
+```
+
+---
+
+## 5. Feature specs
+
+### 5.1 Ride tracking — single day
+- **Start ride** → `ForegroundService` begins GPS logging via `FusedLocationProviderClient`, persistent "Ride in progress" notification shown
+- **End ride** → logging stops, service ends, ride marked `COMPLETED`, summary screen (distance, time, avg speed, route map)
+- Same code path whether the ride is `SINGLE_DAY` or day 1 of a `MULTI_DAY` trip
+
+### 5.2 Ride tracking — multi day
+- **Start trip** once, at the beginning of the whole journey
+- Per day: **Start day** → tracking → **Pause day** (end of riding for that day) or **End day** if final
+- Each start/pause/end action captures a `Stop` (timestamp + lat/lng), reverse-geocoded once to a place name, cached locally in Room so repeat renders don't re-query
+- **End trip** closes out the whole multi-day ride and triggers the trip summary
+
+**Still-riding safety check:** while a day-segment is active, if no significant GPS movement is detected for 30+ minutes (checked via a periodic `WorkManager` task or timer inside the foreground service), fire a notification: "Still riding? Tap to keep tracking, or end your day."
+
+### 5.3 Graphics & video rendering
+- Available for both single-day and multi-day rides
+- **Static image**: composited on-demand via Compose `Canvas`/`ImageBitmap` drawing — route map + stats overlay, near-instant
+- **Animated video**: queued as a `WorkManager` background job
+  - `ForegroundService` + persistent notification: "Rendering ride video… 42%"
+  - On completion: notification "Your ride video is ready" → tapping opens preview/export screen
+  - Multi-day video animates the stitched route day by day, with place-name labels appearing at each recorded stop, plus running totals for distance and time on road
+  - User-selected photos layered as backgrounds behind map/stat overlays during compositing
+  - Rendering pipeline: `MediaCodec` (or Media3 Transformer as the higher-level wrapper) for hardware-accelerated encoding — target 1080p60, automatic fallback to 1080p30 on devices where the hardware encoder can't sustain 60fps at that resolution
+- Export: `MediaStore` save to gallery + `Intent.ACTION_SEND` share sheet (Instagram, etc.)
+
+### 5.4 Fuel tracking
+- Form at each fill-up: odometer reading, liters filled, total cost
+- App derives price/liter and mileage since last fill automatically (Room query against the previous `FuelLog` entry)
+- History screen with trend charts (cost over time, mileage over time)
+
+### 5.5 AI-assisted ride planning
+- User describes a destination/date range; app fetches weather (date range) and nearby places (food, sightseeing, lodging) via the configured provider
+- That structured payload is handed to the AI model — a light RAG-style summarization/ranking task, not open-ended reasoning
+- **Local mode (default):** MediaPipe LLM Inference API running Gemma on-device, no network call for the AI step itself (weather/places calls still happen over the network)
+- **Cloud mode (toggle):** sends the same structured payload to the user's configured cloud AI provider for a stronger answer
+
+### 5.6 Navigation
+- App's own map (Google Maps SDK for Android) shows the **planned route** only — preview, not turn-by-turn
+- User taps **Start navigation** → dialog: "Open in Google Maps?"
+  - **Yes:** `Intent` launches the Google Maps app for actual turn-by-turn guidance
+  - **No:** stays in-app, tracking starts without external navigation
+- Either way, `ForegroundService` tracking starts in the background with a persistent "Trip in progress" notification
+
+### 5.7 Onboarding & key management
+- First open: **Import from Google Drive** or **Start fresh**
+  - Import: Google OAuth (file-scope only via Google Identity Services, not an app login) — pulls a previous export/sync file
+  - Start fresh: settings screen walkthrough where the user optionally adds their own keys (weather, places, maps, cloud AI), each field linking to "how to get this key" instructions
+- No default or shared keys anywhere. Missing a key disables only that specific feature (e.g. no Maps key → route preview falls back to a simpler map or is disabled with a clear message)
+- Keys stored via `EncryptedSharedPreferences`, never logged, never included in crash reports
+
+### 5.8 Sync (optional)
+- Google Drive, user's own account, app-scoped file access (Drive `appDataFolder` or a user-visible dedicated folder)
+- Manual "Sync now" button plus optional sync-on-app-open
+- Structured data (rides, fuel logs, plans) synced as a JSON export from Room; photos/videos optionally included if the user allows larger uploads
+- Last-write-wins; single-user multi-device use, not real-time collaboration
+
+---
+
+## 6. Permissions & notifications
+
+**Permissions requested**
+- `ACCESS_FINE_LOCATION` + `ACCESS_BACKGROUND_LOCATION` (trip tracking)
+- `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_LOCATION` (Android 14+ requires typed foreground service permissions)
+- `POST_NOTIFICATIONS` (Android 13+)
+- Media/storage access for saving photos and exported videos (scoped storage, no broad storage permission needed on modern Android)
+- Google account access only if Drive sync is enabled (file scope, not full account)
+
+**Notifications**
+- "Trip in progress" — persistent, foreground-service backed, while any day-segment is active
+- "Still riding?" — after 30+ min of no movement during an active day-segment
+- "Rendering ride video… X%" — persistent during video render
+- "Your ride video is ready" — on render completion, tap to open
+
+---
+
+## 7. Build phases
+
+1. **Core tracking + static graphics** — single-day start/end tracking, route map, stats image export, fuel log
+2. **Multi-day tracking + video export** — start/pause/end day actions, trip stitching, WorkManager render job + notifications, stop-name labeling
+3. **Photo backgrounds + animation polish** — background layering in render engine, 1080p60/30 tuning across device tiers
+4. **AI ride planning** — weather/places integration, local Gemma pipeline via MediaPipe, cloud toggle
+5. **Navigation handoff** — Google Maps intent + background tracking continuation
+6. **Google Drive sync** — import/export flow, first-run onboarding
+
+---
+
+## 8. Open questions / risks
+
+- **MediaCodec hardware encoder support varies by device** — need capability detection at render start (query supported profiles/levels) rather than failing mid-render; fallback path to 1080p30 or software encoding on lower-end hardware
+- **MediaPipe/Gemma model size vs. app install size** — bundling a multi-GB model in the APK isn't practical; plan for on-first-use download with clear user consent, stored in app-scoped storage
+- **Foreground service + battery drain** — full-day GPS tracking with a persistent notification will noticeably drain battery; worth surfacing an estimated battery-per-hour figure during long multi-day trips
+- **Android 14+ foreground service type requirements** — location-type foreground services now require explicit manifest declarations and runtime checks; needs to be verified against the target SDK at build time since this tightens with each Android release
+- **Reverse-geocoding rate limits on free tiers** (Nominatim) — fine at personal-use volume, but cache aggressively in Room regardless since place names for a given coordinate never change
+- **EncryptedSharedPreferences / Keystore behavior across OEMs** — some manufacturers have historically had quirks with Android Keystore; worth testing on a couple of different device brands before relying on it for API key storage
+
+---
+
+## 9. API key FAQ (to build into Settings)
+
+Each entry below becomes an inline help card next to its key field in-app.
+
+- **Weather (Open-Meteo):** no key required for the free tier — nothing to set up
+- **Places / geocoding (OpenStreetMap):** no key required; optional Google Places key for richer POI data (Google Cloud Console → enable Places API → create API key)
+- **Maps (Google Maps SDK for Android):** Google Cloud Console → enable Maps SDK for Android → create API key → restrict to your app's package name + SHA-1 fingerprint
+- **Cloud AI (Claude API, optional):** console.anthropic.com → API Keys → Create Key
