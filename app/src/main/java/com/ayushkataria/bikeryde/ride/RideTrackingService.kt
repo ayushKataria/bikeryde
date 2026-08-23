@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.location.Geocoder
 import android.location.Location
 import android.os.Build
 import android.os.IBinder
@@ -30,6 +31,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import java.util.Locale
+import kotlin.coroutines.resume
 
 /**
  * Foreground service that owns GPS tracking for a single-day ride. All start/pause/resume/end
@@ -55,6 +60,17 @@ class RideTrackingService : Service() {
             val location = result.lastLocation ?: return
             lastLocation?.let { distanceM += it.distanceTo(location) }
             lastLocation = location
+            val id = rideId ?: return
+            scope.launch {
+                repository.addGpsPoint(
+                    rideId = id,
+                    timestamp = location.time,
+                    lat = location.latitude,
+                    lng = location.longitude,
+                    elevation = if (location.hasAltitude()) location.altitude else null,
+                    speed = if (location.hasSpeed()) location.speed else null
+                )
+            }
         }
     }
 
@@ -84,7 +100,9 @@ class RideTrackingService : Service() {
         isTracking = true
         segmentStartElapsedRealtime = SystemClock.elapsedRealtime()
         scope.launch {
-            val id = repository.startRide(System.currentTimeMillis(), lat = null, lng = null)
+            val location = lastLocation ?: getLastKnownLocation()
+            val placeName = reverseGeocode(location)
+            val id = repository.startRide(System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
             rideId = id
             publishState()
         }
@@ -101,7 +119,9 @@ class RideTrackingService : Service() {
         tickerJob?.cancel()
         updateNotification(getString(R.string.notif_ride_paused))
         scope.launch {
-            repository.pauseRide(id, System.currentTimeMillis(), lat = null, lng = null)
+            val location = lastLocation ?: getLastKnownLocation()
+            val placeName = reverseGeocode(location)
+            repository.pauseRide(id, System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
             publishState()
         }
     }
@@ -109,6 +129,7 @@ class RideTrackingService : Service() {
     private fun onResume() {
         val id = rideId ?: return
         if (isTracking) return
+        val locationAtResume = lastLocation
         lastLocation = null
         isTracking = true
         segmentStartElapsedRealtime = SystemClock.elapsedRealtime()
@@ -116,7 +137,9 @@ class RideTrackingService : Service() {
         startTicker()
         updateNotification(getString(R.string.notif_ride_in_progress))
         scope.launch {
-            repository.resumeRide(id, System.currentTimeMillis(), lat = null, lng = null)
+            val location = locationAtResume ?: getLastKnownLocation()
+            val placeName = reverseGeocode(location)
+            repository.resumeRide(id, System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
             publishState()
         }
     }
@@ -131,12 +154,16 @@ class RideTrackingService : Service() {
         tickerJob?.cancel()
         val finalDistance = distanceM
         val finalDuration = accumulatedDurationS
+        val locationAtEnd = lastLocation
         scope.launch {
+            val location = locationAtEnd ?: getLastKnownLocation()
+            val placeName = reverseGeocode(location)
             repository.endRide(
                 rideId = id,
                 timestamp = System.currentTimeMillis(),
-                lat = null,
-                lng = null,
+                lat = location?.latitude,
+                lng = location?.longitude,
+                placeName = placeName,
                 totalDistanceM = finalDistance,
                 totalDurationS = finalDuration
             )
@@ -151,6 +178,35 @@ class RideTrackingService : Service() {
             rideId = null
             stopForegroundCompat()
             stopSelf()
+        }
+    }
+
+    private suspend fun getLastKnownLocation(): Location? {
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            return null
+        }
+        return suspendCancellableCoroutine { continuation ->
+            runCatching {
+                fusedLocationClient.lastLocation
+                    .addOnSuccessListener { continuation.resume(it) }
+                    .addOnFailureListener { continuation.resume(null) }
+            }.onFailure { continuation.resume(null) }
+        }
+    }
+
+    private suspend fun reverseGeocode(location: Location?): String? {
+        if (location == null) return null
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                @Suppress("DEPRECATION")
+                val addresses = Geocoder(this@RideTrackingService, Locale.getDefault())
+                    .getFromLocation(location.latitude, location.longitude, 1)
+                addresses?.firstOrNull()?.let { address ->
+                    address.locality ?: address.subAdminArea ?: address.adminArea ?: address.featureName
+                }
+            }.getOrNull()
         }
     }
 
@@ -188,6 +244,7 @@ class RideTrackingService : Service() {
         }
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, LOCATION_INTERVAL_MS)
             .setMinUpdateIntervalMillis(LOCATION_INTERVAL_MS)
+            .setMinUpdateDistanceMeters(MIN_UPDATE_DISTANCE_M)
             .build()
         fusedLocationClient.requestLocationUpdates(request, locationCallback, mainLooper)
     }
@@ -253,7 +310,8 @@ class RideTrackingService : Service() {
     companion object {
         private const val CHANNEL_ID = "ride_tracking"
         private const val NOTIFICATION_ID = 1001
-        private const val LOCATION_INTERVAL_MS = 3000L
+        private const val LOCATION_INTERVAL_MS = 2000L
+        private const val MIN_UPDATE_DISTANCE_M = 4f
 
         const val ACTION_START = "com.ayushkataria.bikeryde.ride.action.START"
         const val ACTION_PAUSE = "com.ayushkataria.bikeryde.ride.action.PAUSE"

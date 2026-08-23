@@ -17,6 +17,21 @@
     <string name="end_ride_confirm_title">End ride?</string>
     <string name="end_ride_confirm_message">This will stop tracking and save your ride.</string>
     <string name="action_back">Back</string>
+    <string name="label_time_on_road">Time on Road</string>
+    <string name="section_ride_stats">Ride Stats</string>
+    <string name="section_route">Route</string>
+    <string name="label_avg_speed">Avg Speed</string>
+    <string name="label_max_speed">Max Speed</string>
+    <string name="label_stops">Stops</string>
+    <string name="value_placeholder_speed">–</string>
+    <string name="value_placeholder_count">0</string>
+    <string name="speed_unit_format">%1$s km/h</string>
+    <string name="unknown_location">Unknown location</string>
+    <string name="stop_action_start">Start</string>
+    <string name="stop_action_pause">Paused</string>
+    <string name="stop_action_resume">Resumed</string>
+    <string name="stop_action_end">End</string>
+    <string name="stop_legend_row_format">%1$s · %2$s · %3$s</string>
 
     <!-- Onboarding -->
     <string name="onboarding_title">Welcome to BikeRyde</string>

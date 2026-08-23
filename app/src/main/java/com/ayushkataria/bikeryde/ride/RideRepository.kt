@@ -14,39 +14,43 @@ class RideRepository(context: Context) {
 
     private val dbHelper = RideDbHelper(context.applicationContext)
 
-    suspend fun startRide(startTime: Long, lat: Double?, lng: Double?): Long = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val rideId = db.insert(
-            "ride",
-            null,
-            ContentValues().apply {
-                put("start_time", startTime)
-                put("status", RideStatus.TRACKING.name)
-                put("total_distance_m", 0.0)
-                put("total_duration_s", 0L)
-            }
-        )
-        insertEvent(db, rideId, RideEventAction.START, startTime, lat, lng)
-        rideId
-    }
+    suspend fun startRide(startTime: Long, lat: Double?, lng: Double?, placeName: String?): Long =
+        withContext(Dispatchers.IO) {
+            val db = dbHelper.writableDatabase
+            val rideId = db.insert(
+                "ride",
+                null,
+                ContentValues().apply {
+                    put("start_time", startTime)
+                    put("status", RideStatus.TRACKING.name)
+                    put("total_distance_m", 0.0)
+                    put("total_duration_s", 0L)
+                }
+            )
+            insertEvent(db, rideId, RideEventAction.START, startTime, lat, lng, placeName)
+            rideId
+        }
 
-    suspend fun pauseRide(rideId: Long, timestamp: Long, lat: Double?, lng: Double?) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        setStatus(db, rideId, RideStatus.PAUSED)
-        insertEvent(db, rideId, RideEventAction.PAUSE, timestamp, lat, lng)
-    }
+    suspend fun pauseRide(rideId: Long, timestamp: Long, lat: Double?, lng: Double?, placeName: String?) =
+        withContext(Dispatchers.IO) {
+            val db = dbHelper.writableDatabase
+            setStatus(db, rideId, RideStatus.PAUSED)
+            insertEvent(db, rideId, RideEventAction.PAUSE, timestamp, lat, lng, placeName)
+        }
 
-    suspend fun resumeRide(rideId: Long, timestamp: Long, lat: Double?, lng: Double?) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        setStatus(db, rideId, RideStatus.TRACKING)
-        insertEvent(db, rideId, RideEventAction.RESUME, timestamp, lat, lng)
-    }
+    suspend fun resumeRide(rideId: Long, timestamp: Long, lat: Double?, lng: Double?, placeName: String?) =
+        withContext(Dispatchers.IO) {
+            val db = dbHelper.writableDatabase
+            setStatus(db, rideId, RideStatus.TRACKING)
+            insertEvent(db, rideId, RideEventAction.RESUME, timestamp, lat, lng, placeName)
+        }
 
     suspend fun endRide(
         rideId: Long,
         timestamp: Long,
         lat: Double?,
         lng: Double?,
+        placeName: String?,
         totalDistanceM: Double,
         totalDurationS: Long
     ) = withContext(Dispatchers.IO) {
@@ -62,7 +66,7 @@ class RideRepository(context: Context) {
             "id = ?",
             arrayOf(rideId.toString())
         )
-        insertEvent(db, rideId, RideEventAction.END, timestamp, lat, lng)
+        insertEvent(db, rideId, RideEventAction.END, timestamp, lat, lng, placeName)
     }
 
     suspend fun addGpsPoint(
@@ -85,6 +89,69 @@ class RideRepository(context: Context) {
                 if (speed == null) putNull("speed") else put("speed", speed)
             }
         )
+    }
+
+    /** All logged GPS fixes for a ride, in recording order — the route to render on [RouteMapView]. */
+    suspend fun getRoutePoints(rideId: Long): List<RidePoint> = withContext(Dispatchers.IO) {
+        dbHelper.readableDatabase.query(
+            "gps_point",
+            arrayOf("lat", "lng", "speed"),
+            "ride_id = ?",
+            arrayOf(rideId.toString()),
+            null,
+            null,
+            "id ASC"
+        ).use { cursor ->
+            val points = mutableListOf<RidePoint>()
+            while (cursor.moveToNext()) {
+                points += RidePoint(
+                    lat = cursor.getDouble(0),
+                    lng = cursor.getDouble(1),
+                    speedMps = if (cursor.isNull(2)) null else cursor.getFloat(2)
+                )
+            }
+            points
+        }
+    }
+
+    /** The start/pause/resume/end control actions for a ride, in chronological order — the route's stop markers. */
+    suspend fun getEvents(rideId: Long): List<RideEvent> = withContext(Dispatchers.IO) {
+        dbHelper.readableDatabase.query(
+            "ride_event",
+            arrayOf("action", "timestamp", "lat", "lng", "place_name"),
+            "ride_id = ?",
+            arrayOf(rideId.toString()),
+            null,
+            null,
+            "id ASC"
+        ).use { cursor ->
+            val events = mutableListOf<RideEvent>()
+            while (cursor.moveToNext()) {
+                events += RideEvent(
+                    action = RideEventAction.valueOf(cursor.getString(0)),
+                    timestamp = cursor.getLong(1),
+                    lat = if (cursor.isNull(2)) null else cursor.getDouble(2),
+                    lng = if (cursor.isNull(3)) null else cursor.getDouble(3),
+                    placeName = cursor.getString(4)
+                )
+            }
+            events
+        }
+    }
+
+    /** The fastest single GPS fix recorded for a ride, in m/s — null if no fix reported a speed. */
+    suspend fun getMaxSpeedMps(rideId: Long): Float? = withContext(Dispatchers.IO) {
+        dbHelper.readableDatabase.query(
+            "gps_point",
+            arrayOf("MAX(speed)"),
+            "ride_id = ?",
+            arrayOf(rideId.toString()),
+            null,
+            null,
+            null
+        ).use { cursor ->
+            if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getFloat(0) else null
+        }
     }
 
     /** The most recent ride still in TRACKING or PAUSED state, if any — used to recover UI state. */
@@ -126,7 +193,8 @@ class RideRepository(context: Context) {
         action: RideEventAction,
         timestamp: Long,
         lat: Double?,
-        lng: Double?
+        lng: Double?,
+        placeName: String?
     ) {
         db.insert(
             "ride_event",
@@ -137,6 +205,7 @@ class RideRepository(context: Context) {
                 put("timestamp", timestamp)
                 putNullableDouble("lat", lat)
                 putNullableDouble("lng", lng)
+                put("place_name", placeName)
             }
         )
     }

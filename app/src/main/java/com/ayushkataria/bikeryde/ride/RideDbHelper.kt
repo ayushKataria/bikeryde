@@ -33,7 +33,8 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
                 action TEXT NOT NULL,
                 timestamp INTEGER NOT NULL,
                 lat REAL,
-                lng REAL
+                lng REAL,
+                place_name TEXT
             )
             """.trimIndent()
         )
@@ -61,7 +62,7 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
 
     companion object {
         private const val DB_NAME = "bikeryde.db"
-        private const val DB_VERSION = 1
+        private const val DB_VERSION = 2
     }
 }
 

@@ -24,6 +24,22 @@ data class Ride(
     val totalDurationS: Long
 )
 
+/** A single logged GPS fix for the live route render — lighter-weight than the full [GpsPoint] model. */
+data class RidePoint(
+    val lat: Double,
+    val lng: Double,
+    val speedMps: Float?
+)
+
+/** A start/pause/resume/end control action with its reverse-geocoded place name, for the route's stop markers. */
+data class RideEvent(
+    val action: RideEventAction,
+    val timestamp: Long,
+    val lat: Double?,
+    val lng: Double?,
+    val placeName: String?
+)
+
 /** Snapshot the UI observes; updated live while a ride is tracking or paused. */
 data class RideUiState(
     val rideId: Long? = null,
