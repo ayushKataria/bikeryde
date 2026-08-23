@@ -16,4 +16,63 @@
     <string name="permission_required">Location permission is required to track your ride.</string>
     <string name="end_ride_confirm_title">End ride?</string>
     <string name="end_ride_confirm_message">This will stop tracking and save your ride.</string>
+    <string name="action_back">Back</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_title">Welcome to BikeRyde</string>
+    <string name="onboarding_subtitle">A local-first ride tracker. Your data stays on this device unless you choose to sync it.</string>
+    <string name="onboarding_start_fresh">Start Fresh</string>
+    <string name="onboarding_import_drive">Import from Google Drive</string>
+    <string name="onboarding_import_coming_soon">Google Drive import is coming soon. Starting fresh for now.</string>
+
+    <!-- Home -->
+    <string name="home_subtitle">What do you want to do?</string>
+    <string name="home_card_single_day_title">Single-Day Ride</string>
+    <string name="home_card_single_day_subtitle">Track today\'s ride with manual start, pause, and end</string>
+    <string name="home_card_multi_day_title">Multi-Day Ride</string>
+    <string name="home_card_multi_day_subtitle">Plan and track a trip spanning several days</string>
+    <string name="home_card_fuel_title">Fuel Log</string>
+    <string name="home_card_fuel_subtitle">Track fill-ups, mileage, and cost trends</string>
+    <string name="home_card_planning_title">AI Ride Planning</string>
+    <string name="home_card_planning_subtitle">Weather, food, sightseeing, and lodging suggestions</string>
+    <string name="home_card_ride_history_title">Ride History</string>
+    <string name="home_card_ride_history_subtitle">Browse past rides and create images or animations for them</string>
+    <string name="home_settings_content_description">Settings</string>
+
+    <!-- Post-ride actions (shown after ending a single or multi-day ride) -->
+    <string name="post_ride_create_image">Create Static Image</string>
+    <string name="post_ride_create_animation">Create Animation</string>
+    <string name="settings_icon">⚙</string>
+
+    <!-- Coming soon placeholder -->
+    <string name="coming_soon_icon">🚧</string>
+    <string name="coming_soon_label">Coming soon</string>
+    <string name="coming_soon_desc_multi_day">Plan and track rides spanning multiple days, with per-day start/pause/end and a stitched trip summary.</string>
+    <string name="coming_soon_desc_fuel">Log odometer readings, liters, and cost at each fill-up, with mileage and cost trend charts.</string>
+    <string name="coming_soon_desc_planning">Describe a destination and date range to get AI-assisted weather, food, sightseeing, and lodging suggestions.</string>
+    <string name="coming_soon_desc_static_image">Compose a route map and stats overlay into a shareable image for this ride.</string>
+    <string name="coming_soon_desc_animation">Render an animated video of this ride\'s route with running distance, time, and stop labels.</string>
+    <string name="coming_soon_desc_ride_history">Browse your completed single and multi-day rides, and create or revisit the static image or animation for any of them.</string>
+
+    <!-- Settings -->
+    <string name="settings_section_api_keys">API Keys</string>
+    <string name="settings_api_keys_hint">Bring your own keys. Missing a key just disables that feature — nothing is shared or proxied.</string>
+    <string name="settings_key_places_label">Places / Geocoding (optional)</string>
+    <string name="settings_key_places_helper">OpenStreetMap works with no key. Add a Google Places key for richer results.</string>
+    <string name="settings_key_maps_label">Maps SDK key</string>
+    <string name="settings_key_maps_helper">Google Cloud Console → enable Maps SDK for Android → create a key restricted to this app.</string>
+    <string name="settings_key_cloud_ai_label">Cloud AI key (optional)</string>
+    <string name="settings_key_cloud_ai_helper">console.anthropic.com → API Keys → Create Key.</string>
+    <string name="settings_section_ai_mode">AI planning mode</string>
+    <string name="settings_ai_mode_local">On-device</string>
+    <string name="settings_ai_mode_cloud">Cloud</string>
+    <string name="settings_section_units">Units</string>
+    <string name="settings_units_km">Kilometers</string>
+    <string name="settings_units_mi">Miles</string>
+    <string name="settings_section_sync">Google Drive sync</string>
+    <string name="settings_sync_toggle_label">Sync rides, fuel logs, and plans to Drive</string>
+    <string name="settings_sync_now">Sync now</string>
+    <string name="settings_sync_coming_soon">Google Drive sync is coming soon.</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_saved_confirmation">Settings saved</string>
 </resources>

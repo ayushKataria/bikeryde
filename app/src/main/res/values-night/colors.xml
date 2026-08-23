@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material 3 color roles — dark scheme. -->
+    <color name="md_primary">#FFB59D</color>
+    <color name="md_on_primary">#5E1B00</color>
+    <color name="md_primary_container">#832400</color>
+    <color name="md_on_primary_container">#FFDBCB</color>
+
+    <color name="md_secondary">#E6BEAD</color>
+    <color name="md_on_secondary">#43291D</color>
+    <color name="md_secondary_container">#5C3F32</color>
+    <color name="md_on_secondary_container">#FFDBCB</color>
+
+    <color name="md_tertiary">#9ED48A</color>
+    <color name="md_on_tertiary">#0B3900</color>
+    <color name="md_tertiary_container">#1F4E15</color>
+    <color name="md_on_tertiary_container">#BAF0A7</color>
+
+    <color name="md_error">#FFB4AB</color>
+    <color name="md_on_error">#690005</color>
+    <color name="md_error_container">#93000A</color>
+    <color name="md_on_error_container">#FFDAD6</color>
+
+    <color name="md_background">#1A120D</color>
+    <color name="md_on_background">#F0DFD7</color>
+    <color name="md_surface">#1A120D</color>
+    <color name="md_on_surface">#F0DFD7</color>
+    <color name="md_surface_variant">#53443B</color>
+    <color name="md_on_surface_variant">#D8C2B8</color>
+    <color name="md_outline">#A08D83</color>
+    <color name="md_surface_container">#271E18</color>
+    <color name="md_surface_container_high">#32281F</color>
+
+    <color name="status_idle">#A08D83</color>
+    <color name="status_tracking">#9ED48A</color>
+    <color name="status_paused">#F5C36A</color>
+    <color name="status_completed">#A8C8FF</color>
+</resources>
