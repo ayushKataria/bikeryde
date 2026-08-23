@@ -1,10 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <!-- Material 3 color roles — light scheme. Primary is an energetic road-orange. -->
+    <color name="md_primary">#E8622B</color>
+    <color name="md_on_primary">#FFFFFF</color>
+    <color name="md_primary_container">#FFDBCB</color>
+    <color name="md_on_primary_container">#3A1300</color>
+
+    <color name="md_secondary">#77574B</color>
+    <color name="md_on_secondary">#FFFFFF</color>
+    <color name="md_secondary_container">#FFDBCB</color>
+    <color name="md_on_secondary_container">#2C160D</color>
+
+    <color name="md_tertiary">#39662E</color>
+    <color name="md_on_tertiary">#FFFFFF</color>
+    <color name="md_tertiary_container">#BAF0A7</color>
+    <color name="md_on_tertiary_container">#082100</color>
+
+    <color name="md_error">#BA1A1A</color>
+    <color name="md_on_error">#FFFFFF</color>
+    <color name="md_error_container">#FFDAD6</color>
+    <color name="md_on_error_container">#410002</color>
+
+    <color name="md_background">#FFF8F5</color>
+    <color name="md_on_background">#221A15</color>
+    <color name="md_surface">#FFF8F5</color>
+    <color name="md_on_surface">#221A15</color>
+    <color name="md_surface_variant">#F5DED3</color>
+    <color name="md_on_surface_variant">#53443B</color>
+    <color name="md_outline">#85736A</color>
+    <color name="md_surface_container">#FCEAE1</color>
+    <color name="md_surface_container_high">#F6E4DB</color>
+
+    <!-- Ride-status accents -->
+    <color name="status_idle">#85736A</color>
+    <color name="status_tracking">#39662E</color>
+    <color name="status_paused">#8A5A00</color>
+    <color name="status_completed">#3A5FA0</color>
 </resources>

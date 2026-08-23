@@ -1,3 +1,19 @@
 <resources>
     <string name="app_name">BikeRyde</string>
+    <string name="subtitle_ride_tracker">Single-day ride tracker</string>
+    <string name="label_distance">Distance</string>
+    <string name="notif_channel_name">Ride tracking</string>
+    <string name="notif_ride_in_progress">Ride in progress</string>
+    <string name="notif_ride_paused">Ride paused</string>
+    <string name="status_idle">No ride in progress</string>
+    <string name="status_tracking">Tracking</string>
+    <string name="status_paused">Paused</string>
+    <string name="status_completed">Ride complete</string>
+    <string name="action_start">Start Ride</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="action_end">End Ride</string>
+    <string name="permission_required">Location permission is required to track your ride.</string>
+    <string name="end_ride_confirm_title">End ride?</string>
+    <string name="end_ride_confirm_message">This will stop tracking and save your ride.</string>
 </resources>
