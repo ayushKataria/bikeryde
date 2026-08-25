@@ -48,7 +48,7 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
             CREATE TABLE stop (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ride_day_id INTEGER NOT NULL,
-                action TEXT NOT NULL,
+                "action" TEXT NOT NULL,
                 timestamp INTEGER NOT NULL,
                 lat REAL,
                 lng REAL,

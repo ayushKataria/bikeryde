@@ -192,7 +192,7 @@ class RideRepository(context: Context) {
     suspend fun getEvents(rideId: Long): List<RideEvent> = withContext(Dispatchers.IO) {
         dbHelper.readableDatabase.rawQuery(
             """
-            SELECT stop.action, stop.timestamp, stop.lat, stop.lng, stop.place_name
+            SELECT stop."action", stop.timestamp, stop.lat, stop.lng, stop.place_name
             FROM stop
             JOIN ride_day ON stop.ride_day_id = ride_day.id
             WHERE ride_day.ride_id = ?

@@ -35,6 +35,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.coroutines.resume
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Foreground service that owns GPS tracking for a single-day ride. All start/pause/resume/end
@@ -232,7 +233,7 @@ class RideTrackingService : Service() {
         tickerJob = scope.launch {
             while (true) {
                 publishState()
-                delay(1000)
+                delay(1000.milliseconds)
             }
         }
     }
