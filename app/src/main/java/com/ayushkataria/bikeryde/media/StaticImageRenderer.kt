@@ -15,10 +15,10 @@ import kotlinx.coroutines.withContext
 class StaticImageRenderer(private val context: Context) {
 
     suspend fun render(data: RideRenderData): RenderOutput {
-        data.coverImagePath?.let { BackgroundImageCache.preload(listOf(it)) }
+        data.coverImagePath?.let { BackgroundImageCache.preload(listOf(it), WIDTH, HEIGHT) }
         val bitmap = withContext(Dispatchers.Default) {
             Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888).also {
-                RouteFrameDrawer.draw(Canvas(it), WIDTH, HEIGHT, data, progress = 1f)
+                RouteFrameDrawer.prepare(WIDTH, HEIGHT, data).draw(Canvas(it), progress = 1f)
             }
         }
         BackgroundImageCache.clear()

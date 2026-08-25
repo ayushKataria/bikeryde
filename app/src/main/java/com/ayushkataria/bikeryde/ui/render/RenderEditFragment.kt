@@ -33,6 +33,7 @@ import com.ayushkataria.bikeryde.media.VideoRenderWorker
 import com.ayushkataria.bikeryde.ride.RideEventAction
 import com.ayushkataria.bikeryde.ride.RideRepository
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.launch
@@ -68,6 +69,7 @@ class RenderEditFragment : Fragment(R.layout.fragment_render_edit) {
     private val stopBackgroundPaths = mutableMapOf<Int, String>()
     private val stopThumbnails = mutableMapOf<Int, ImageView>()
     private val stopNameInputs = mutableMapOf<Int, TextInputEditText>()
+    private val excludedStopIndices = mutableSetOf<Int>()
 
     private var recommendedDurationS = VideoDurationRecommender.MIN_SECONDS
     private var durationMultiplier = VideoDurationRecommender.DEFAULT_MULTIPLIER
@@ -150,6 +152,7 @@ class RenderEditFragment : Fragment(R.layout.fragment_render_edit) {
         val thumbnail = row.findViewById<ImageView>(R.id.rowThumbnail)
         val meta = row.findViewById<TextView>(R.id.rowMeta)
         val nameInput = row.findViewById<TextInputEditText>(R.id.rowNameInput)
+        val includeCheckbox = row.findViewById<MaterialCheckBox>(R.id.rowIncludeCheckbox)
 
         val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
         meta.text = getString(
@@ -169,8 +172,21 @@ class RenderEditFragment : Fragment(R.layout.fragment_render_edit) {
         }
         stopNameInputs[index] = nameInput
 
+        includeCheckbox.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) excludedStopIndices.remove(index) else excludedStopIndices.add(index)
+            setStopRowIncluded(row, thumbnail, nameInput, isChecked)
+        }
+
         (row.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin = if (index == 0) 0 else dpToPx(20)
         return row
+    }
+
+    /** Dims a stop row's other controls when it's unchecked — excluded stops still show their
+     * recorded info for context, but can't be renamed or given a photo since they won't render. */
+    private fun setStopRowIncluded(row: View, thumbnail: ImageView, nameInput: TextInputEditText, included: Boolean) {
+        row.alpha = if (included) 1f else 0.5f
+        thumbnail.isEnabled = included
+        nameInput.isEnabled = included
     }
 
     private fun updateVideoLengthPreview() {
@@ -252,6 +268,7 @@ class RenderEditFragment : Fragment(R.layout.fragment_render_edit) {
             val data = RideRenderDataAssembler(repository).assemble(
                 rideId = rideId,
                 stopNameOverrides = nameOverrides,
+                excludedStopIndices = excludedStopIndices,
                 coverImagePath = coverImagePath
             )
             val output = data?.let { runCatching { StaticImageRenderer(requireContext()).render(it) }.getOrNull() }
@@ -277,6 +294,7 @@ class RenderEditFragment : Fragment(R.layout.fragment_render_edit) {
                     .putLong(VideoRenderWorker.KEY_RIDE_ID, rideId)
                     .putStringArray(VideoRenderWorker.KEY_STOP_NAMES, namesArray)
                     .putStringArray(VideoRenderWorker.KEY_STOP_BACKGROUNDS, backgroundsArray)
+                    .putIntArray(VideoRenderWorker.KEY_EXCLUDED_STOPS, excludedStopIndices.toIntArray())
                     .putInt(
                         VideoRenderWorker.KEY_DURATION_SECONDS,
                         VideoDurationRecommender.apply(recommendedDurationS, durationMultiplier)

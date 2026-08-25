@@ -98,6 +98,7 @@
     <string name="render_edit_stops_empty">This ride has no recorded stops yet.</string>
     <string name="render_edit_generate">Generate</string>
     <string name="render_edit_stop_name_hint">Stop name</string>
+    <string name="render_edit_stop_include">Include</string>
     <string name="render_edit_add_stop_photo">Add photo</string>
 
     <!-- Coming soon placeholder -->

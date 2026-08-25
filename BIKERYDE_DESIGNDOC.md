@@ -29,30 +29,30 @@ no backend, no hosting cost. Native Android app built in Kotlin.
 
 ```
 ┌───────────────────────────────────────────────────────────┐
-│  BikeRyde — native Android app (Kotlin, Jetpack Compose)   │
-│                                                             │
+│  BikeRyde — native Android app (Kotlin, Jetpack Compose)  │
+│                                                           │
 │  ┌────────────────┐   ┌────────────────┐                  │
-│  │ GPS tracking    │   │ Render engine   │                  │
-│  │ FusedLocation-  │   │ MediaCodec /    │                  │
-│  │ ProviderClient  │   │ Media3          │                  │
-│  │ + ForegroundSvc │   │ Transformer     │                  │
-│  └────────┬────────┘   └────────┬────────┘                  │
-│           v                     v                            │
-│  ┌─────────────────────────────────────────┐                 │
-│  │ Local storage                            │                 │
-│  │ Room (SQLite) — structured data          │                 │
-│  │ App-scoped storage — photos, video       │                 │
-│  └───────────────────┬───────────────────────┘                │
-│                       │                                       │
-│  ┌─────────────────────────────────────────┐                 │
-│  │ Ride planner                             │                 │
-│  │ MediaPipe LLM Inference (Gemma, local)   │                 │
-│  │ or cloud AI API (toggle)                 │                 │
-│  └───────────────────┬───────────────────────┘                │
-└──────────────────────┼──────────────────────────────────────┘
-                        │
-     ┌──────────────────┼──────────────────┬──────────────────┐
-     v                   v                  v                  v
+│  │ GPS tracking   │   │ Render engine  │                  │
+│  │ FusedLocation- │   │ MediaCodec /   │                  │
+│  │ ProviderClient │   │ Media3         │                  │
+│  │ + ForegroundSvc│   │ Transformer    │                  │
+│  └────────┬───────┘   └────────┬───────┘                  │
+│           v                    v                          │
+│  ┌─────────────────────────────────────────┐              │
+│  │ Local storage                           │              │
+│  │ Room (SQLite) — structured data         │              │
+│  │ App-scoped storage — photos, video      │              │
+│  └───────────────────┬─────────────────────┘              │
+│                      │                                    │
+│  ┌─────────────────────────────────────────┐              │
+│  │ Ride planner                            │              │
+│  │ MediaPipe LLM Inference (Gemma, local)  │              │
+│  │ or cloud AI API (toggle)                │              │
+│  └───────────────────┬─────────────────────┘              │
+└──────────────────────┼────────────────────────────────────┘
+                       │
+     ┌─────────────────┼──────────────────┬──────────────────┐
+     v                 v                  v                  v
 Google Drive API   Weather/Places API   Maps SDK for      Cloud AI API
 (optional sync,     (BYO key or free    Android (preview  (BYO key,
  user's account)     tier)               only, BYO key)    optional)

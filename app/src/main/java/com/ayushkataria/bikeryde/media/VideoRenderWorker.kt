@@ -5,6 +5,7 @@ import android.content.pm.ServiceInfo
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
+import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.os.Build
@@ -13,8 +14,8 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.ayushkataria.bikeryde.ride.RideRepository
-import kotlinx.coroutines.delay
 import java.io.File
+import java.nio.ByteBuffer
 
 /**
  * Renders a ride's animated route video in the background via [MediaCodec] + a Surface input
@@ -43,10 +44,12 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
         val stopBackgroundPaths = stopBackgrounds?.mapIndexedNotNull { i, path ->
             if (path.isNullOrBlank()) null else i to path
         }?.toMap() ?: emptyMap()
+        val excludedStopIndices = inputData.getIntArray(KEY_EXCLUDED_STOPS)?.toSet() ?: emptySet()
 
         val rideRepository = RideRepository(applicationContext)
         val renderRepository = RenderRepository(applicationContext)
-        val data = RideRenderDataAssembler(rideRepository).assemble(rideId, stopNameOverrides, stopBackgroundPaths)
+        val data = RideRenderDataAssembler(rideRepository)
+            .assemble(rideId, stopNameOverrides, stopBackgroundPaths, excludedStopIndices)
         if (data == null || data.allPoints.size < 2) return Result.failure()
 
         val recommendedDurationS = VideoDurationRecommender.recommend(data.allStops.size)
@@ -62,7 +65,7 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
         renderRepository.markProcessing(renderId)
 
         val backgroundPaths = listOfNotNull(data.coverImagePath) + data.allStops.mapNotNull { it.backgroundImagePath }
-        BackgroundImageCache.preload(backgroundPaths)
+        BackgroundImageCache.preload(backgroundPaths, WIDTH, HEIGHT)
 
         return try {
             val (outputFile, fps) = renderToFile(data, durationS) { percent ->
@@ -114,7 +117,18 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
 
     private suspend fun renderToFile(data: RideRenderData, durationS: Int, onProgress: suspend (Int) -> Unit): Pair<File, Int> {
         val fps = chooseFrameRate()
-        val frameCount = fps * durationS
+        // The animation itself sweeps progress 0..1 across animationFrameCount frames (the
+        // duration the rider chose/customized); lingerFrameCount then holds on the completed
+        // route — full path, all stops, final stats — at the ride's last stop, so the video
+        // doesn't cut away the instant it finishes drawing. Added on top, not carved out of the
+        // chosen duration.
+        val animationFrameCount = fps * durationS
+        val lingerFrameCount = fps * LINGER_SECONDS
+        val frameCount = animationFrameCount + lingerFrameCount
+        // All the per-render setup (point projection, distance prefix sums, Paint objects) happens
+        // once here, not on every frame — see RouteFrameDrawer's kdoc for why that matters for both
+        // render time and playback smoothness.
+        val preparedRender = RouteFrameDrawer.prepare(WIDTH, HEIGHT, data)
 
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, WIDTH, HEIGHT).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
@@ -162,24 +176,40 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
         }
 
         try {
-            // Pace frame submission to real time so the encoder's automatic buffer timestamps
-            // (there's no public API to set them explicitly on a lockCanvas-fed input surface)
-            // produce a video whose duration actually matches frameCount / fps.
-            val startNanos = System.nanoTime()
+            // Draw and submit frames as fast as the device can manage — no artificial real-time
+            // pacing. The encoder's automatic buffer timestamps come from wall-clock submission
+            // time (there's no public API to set them explicitly on a lockCanvas-fed input
+            // surface), so trying to pace submission to match real time only works when the device
+            // can draw+encode a frame faster than its budget; the moment it can't (slow devices,
+            // photo backgrounds, long routes), frames fall behind and both the total render time
+            // and the video's own internal timing balloon. retimeToEvenPacing() below fixes the
+            // *video's* timing deterministically afterward, so there's nothing to gain from trying
+            // to hit real time during capture — only render time to lose.
+            var lastReportedPercent = -1
             for (frame in 0 until frameCount) {
-                val progress = frame / (frameCount - 1).toFloat()
+                val progress = if (frame < animationFrameCount) {
+                    frame / (animationFrameCount - 1).toFloat()
+                } else {
+                    1f
+                }
                 val canvas = inputSurface.lockCanvas(null)
                 try {
-                    RouteFrameDrawer.draw(canvas, WIDTH, HEIGHT, data, progress)
+                    preparedRender.draw(canvas, progress)
                 } finally {
                     inputSurface.unlockCanvasAndPost(canvas)
                 }
                 drainEncoder(false)
-                onProgress(((frame + 1) * 100 / frameCount))
 
-                val targetElapsedNanos = frame.toLong() * 1_000_000_000L / fps
-                val remainingNanos = targetElapsedNanos - (System.nanoTime() - startNanos)
-                if (remainingNanos > 0) delay(remainingNanos / 1_000_000)
+                // onProgress() rebuilds and re-posts the foreground notification and writes to
+                // WorkManager's own progress store — each a cross-process call expensive enough
+                // that firing it on every one of a few hundred frames (instead of only the ~100
+                // times the displayed percent actually changes) was itself blowing out the render
+                // time far more than the drawing work ever did.
+                val percent = (frame + 1) * 100 / frameCount
+                if (percent != lastReportedPercent) {
+                    onProgress(percent)
+                    lastReportedPercent = percent
+                }
             }
             drainEncoder(true)
         } finally {
@@ -190,7 +220,70 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
             muxer.release()
         }
 
-        return outputFile to fps
+        val retimedFile = retimeToEvenPacing(outputFile, fps)
+        return retimedFile to fps
+    }
+
+    /**
+     * Rewrites the video track's presentation timestamps to be evenly spaced across exactly
+     * `sampleCount / fps` seconds, regardless of how long capture actually took — a fast remux
+     * (reads and rewrites already-encoded samples via [MediaExtractor]/[MediaMuxer], no
+     * re-encoding) that makes the output duration and playback smoothness independent of device
+     * speed or how expensive a given ride's content was to draw.
+     */
+    private fun retimeToEvenPacing(source: File, fps: Int): File {
+        val extractor = MediaExtractor()
+        extractor.setDataSource(source.absolutePath)
+
+        var trackIndex = -1
+        var trackFormat: MediaFormat? = null
+        for (i in 0 until extractor.trackCount) {
+            val format = extractor.getTrackFormat(i)
+            if (format.getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true) {
+                trackIndex = i
+                trackFormat = format
+                break
+            }
+        }
+        if (trackIndex == -1 || trackFormat == null) {
+            extractor.release()
+            return source
+        }
+        extractor.selectTrack(trackIndex)
+
+        val retimedFile = File(source.parentFile, "retimed_${source.name}")
+        val muxer = MediaMuxer(retimedFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        val outTrackIndex = muxer.addTrack(trackFormat)
+        muxer.start()
+
+        val bufferSize = if (trackFormat.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+            trackFormat.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
+        } else {
+            2 * 1024 * 1024
+        }.coerceAtLeast(1024 * 1024)
+        val buffer = ByteBuffer.allocate(bufferSize)
+        val bufferInfo = MediaCodec.BufferInfo()
+        val frameDurationUs = 1_000_000L / fps
+        var frameIndex = 0L
+
+        while (true) {
+            buffer.clear()
+            val sampleSize = extractor.readSampleData(buffer, 0)
+            if (sampleSize < 0) break
+            bufferInfo.offset = 0
+            bufferInfo.size = sampleSize
+            bufferInfo.presentationTimeUs = frameIndex * frameDurationUs
+            bufferInfo.flags = extractor.sampleFlags
+            muxer.writeSampleData(outTrackIndex, buffer, bufferInfo)
+            extractor.advance()
+            frameIndex++
+        }
+
+        muxer.stop()
+        muxer.release()
+        extractor.release()
+        source.delete()
+        return retimedFile
     }
 
     /** Moves the temp working file (written to [Context.getCacheDir] during encoding) into
@@ -212,6 +305,8 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
         const val KEY_STOP_NAMES = "stopNames"
         /** String array aligned the same way — one background photo path per stop, empty for none. */
         const val KEY_STOP_BACKGROUNDS = "stopBackgrounds"
+        /** Merged-stop indices (same keying) the rider unchecked on the customize screen — dropped entirely. */
+        const val KEY_EXCLUDED_STOPS = "excludedStops"
         /** Animation length in seconds — defaults to [VideoDurationRecommender.recommend] if omitted. */
         const val KEY_DURATION_SECONDS = "durationSeconds"
 
@@ -220,6 +315,9 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
         private const val TARGET_FPS = 60
         private const val FALLBACK_FPS = 30
         private const val BIT_RATE = 8_000_000
+        /** Extra hold on the completed route (final stop, full stats) at the end of the video, on
+         * top of the rider's chosen animation length. */
+        private const val LINGER_SECONDS = 3
 
         fun uniqueWorkName(rideId: Long) = "video_render_$rideId"
     }

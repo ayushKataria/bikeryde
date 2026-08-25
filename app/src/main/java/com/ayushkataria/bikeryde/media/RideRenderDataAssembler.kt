@@ -19,12 +19,16 @@ class RideRenderDataAssembler(private val rideRepository: RideRepository) {
      *   followed by a Pause at the same place is one entry, not two. Empty/absent falls back to
      *   the recorded place name.
      * @param stopBackgroundPaths per-merged-stop background photo paths, same keying, video only.
+     * @param excludedStopIndices merged-stop positions (same keying) the rider unchecked on the
+     *   customize screen — dropped entirely, so neither the image nor the video shows a
+     *   marker/label (or crossfades to a photo) for them.
      * @param coverImagePath the single background photo for a static image.
      */
     suspend fun assemble(
         rideId: Long,
         stopNameOverrides: Map<Int, String> = emptyMap(),
         stopBackgroundPaths: Map<Int, String> = emptyMap(),
+        excludedStopIndices: Set<Int> = emptySet(),
         coverImagePath: String? = null
     ): RideRenderData? {
         val ride = rideRepository.getRide(rideId) ?: return null
@@ -35,7 +39,8 @@ class RideRenderDataAssembler(private val rideRepository: RideRepository) {
         val maxSpeedKmh = rideRepository.getMaxSpeedMps(rideId)?.let { it * 3.6 }
         val title = SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(ride.startTime)
 
-        val renderStops = mergedStops.mapIndexed { index, stop ->
+        val renderStops = mergedStops.mapIndexedNotNull { index, stop ->
+            if (index in excludedStopIndices) return@mapIndexedNotNull null
             RenderStop(
                 action = stop.primaryAction,
                 timestamp = stop.timestamp,
