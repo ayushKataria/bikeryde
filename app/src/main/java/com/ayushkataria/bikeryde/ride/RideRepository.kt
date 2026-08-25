@@ -245,6 +245,13 @@ class RideRepository(context: Context) {
         }
     }
 
+    /** Whether any ride has ever been recorded — used to skip onboarding on subsequent launches. */
+    suspend fun hasAnyRides(): Boolean = withContext(Dispatchers.IO) {
+        dbHelper.readableDatabase.query(
+            "ride", arrayOf("id"), null, null, null, null, null, "1"
+        ).use { it.moveToFirst() }
+    }
+
     /** Completed rides, most recent first — the ride history list. */
     suspend fun getCompletedRides(): List<Ride> = withContext(Dispatchers.IO) {
         dbHelper.readableDatabase.query(

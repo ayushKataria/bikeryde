@@ -1,6 +1,5 @@
 package com.ayushkataria.bikeryde.media
 
-import android.content.ContentValues
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.media.MediaCodec
@@ -8,9 +7,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.MediaMuxer
-import android.net.Uri
 import android.os.Build
-import android.provider.MediaStore
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
@@ -22,8 +19,9 @@ import java.io.File
 /**
  * Renders a ride's animated route video in the background via [MediaCodec] + a Surface input
  * (drawing each frame with [RouteFrameDrawer] straight onto the encoder's Surface, no OpenGL
- * needed), muxes it to MP4, and saves it to the gallery. Reports progress via [setProgress] and a
- * persistent notification, per design doc §5.3/§6.
+ * needed), muxes it to MP4, and moves it into app-private storage ([RenderFileStorage]) — a
+ * preview only, not saved anywhere visible until the user taps Save. Reports progress via
+ * [setProgress] and a persistent notification, per design doc §5.3/§6.
  *
  * Operates on [RideRenderData] — day count is opaque to this worker, so once multi-day tracking
  * exists, rendering a multi-day trip's video is the same code path as a single day's.
@@ -54,7 +52,13 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
         val recommendedDurationS = VideoDurationRecommender.recommend(data.allStops.size)
         val durationS = inputData.getInt(KEY_DURATION_SECONDS, recommendedDurationS)
 
-        val renderId = renderRepository.insertQueued(rideId, RenderType.VIDEO)
+        // This render replaces any previous preview for the same ride/type — delete it now
+        // rather than leaving orphaned preview files behind in app storage.
+        renderRepository.getLatest(rideId, RenderType.VIDEO)?.filePath?.let { path ->
+            runCatching { File(path).delete() }
+        }
+
+        val renderId = renderRepository.insertQueued(rideId, RenderType.VIDEO, workId = id.toString())
         renderRepository.markProcessing(renderId)
 
         val backgroundPaths = listOfNotNull(data.coverImagePath) + data.allStops.mapNotNull { it.backgroundImagePath }
@@ -65,11 +69,10 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
                 setProgress(workDataOf(KEY_PROGRESS to percent))
                 setForeground(createForegroundInfo(percent))
             }
-            val uri = saveToGallery(outputFile)
-            outputFile.delete()
-            renderRepository.markDone(renderId, uri.toString(), "${WIDTH}x$HEIGHT", fps)
+            val output = saveToAppStorage(outputFile)
+            renderRepository.markDone(renderId, output.filePath, "${WIDTH}x$HEIGHT", fps)
             RenderNotifications.showReady(applicationContext, rideId)
-            Result.success(workDataOf(KEY_RESULT_URI to uri.toString()))
+            Result.success(workDataOf(KEY_RESULT_URI to output.uri.toString()))
         } catch (e: Exception) {
             renderRepository.markFailed(renderId)
             Result.failure()
@@ -190,23 +193,15 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
         return outputFile to fps
     }
 
-    private fun saveToGallery(file: File): Uri {
-        val resolver = applicationContext.contentResolver
-        val values = ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, "bikeryde_${System.currentTimeMillis()}.mp4")
-            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/BikeRyde")
-                put(MediaStore.Video.Media.IS_PENDING, 1)
-            }
+    /** Moves the temp working file (written to [Context.getCacheDir] during encoding) into
+     * app-private, persistent storage — the actual preview location. */
+    private fun saveToAppStorage(file: File): RenderOutput {
+        val dest = RenderFileStorage.newVideoFile(applicationContext)
+        if (!file.renameTo(dest)) {
+            file.copyTo(dest, overwrite = true)
+            file.delete()
         }
-        val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
-            ?: error("Unable to create MediaStore entry for ride video")
-        resolver.openOutputStream(uri)?.use { out -> file.inputStream().use { it.copyTo(out) } }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            resolver.update(uri, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null)
-        }
-        return uri
+        return RenderOutput(RenderFileStorage.uriFor(applicationContext, dest), dest.absolutePath)
     }
 
     companion object {

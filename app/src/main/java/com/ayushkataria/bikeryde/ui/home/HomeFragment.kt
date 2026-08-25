@@ -22,7 +22,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
             navigateToComingSoon(R.string.home_card_multi_day_title, R.string.coming_soon_desc_multi_day)
         }
         bindCard(view, R.id.cardRideHistory, R.string.home_card_ride_history_title, R.string.home_card_ride_history_subtitle) {
-            navigateToComingSoon(R.string.home_card_ride_history_title, R.string.coming_soon_desc_ride_history)
+            findNavController().navigate(R.id.action_home_to_rideHistory)
         }
         bindCard(view, R.id.cardFuelLog, R.string.home_card_fuel_title, R.string.home_card_fuel_subtitle) {
             navigateToComingSoon(R.string.home_card_fuel_title, R.string.coming_soon_desc_fuel)

@@ -1,55 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Winding route, start (green flag/dot) to end (red star) — same color coding as the
-         app's own route markers (RouteFrameDrawer/RouteMapView: start = green, end = red). -->
+    <!-- 1. The Winding Route -->
     <path
         android:strokeColor="#221A15"
-        android:strokeWidth="8"
+        android:strokeWidth="6"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M26,42 C54,42 40,62 54,62 C68,62 54,80 71,80" />
+        android:pathData="M 28,35 H 55 C 75,35 75,55 55,55 C 35,55 35,75 45,75 H 72" />
 
-    <!-- Start flag pole -->
+    <!-- 2. The Start Flag -->
+    <!-- Flag base/pole -->
+    <path
+        android:fillColor="#39662E"
+        android:pathData="M 25,35 C 25,37 27,38 28,38 C 29,38 31,37 31,35 V 20 H 25 Z" />
+    <!-- Flag cloth -->
+    <path
+        android:fillColor="#39662E"
+        android:strokeColor="#221A15"
+        android:strokeWidth="1.5"
+        android:strokeLineJoin="round"
+        android:pathData="M 31,20 H 42 L 38,24.5 L 42,29 H 31 Z" />
+    <!-- Letter 'S' inside the flag -->
+    <path
+        android:strokeColor="#FFF8F5"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M 37.5,23 C 35.5,23 34,23 34,24.5 C 34,26 37,25.5 37,27 C 37,28.5 34,28.5 34,27.5" />
+
+    <!-- 3. The End Star -->
+    <!-- Star Shape -->
+    <path
+        android:fillColor="#FFF8F5"
+        android:strokeColor="#221A15"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M 75,63 L 78,69 L 85,69 L 79,74 L 81,81 L 75,77 L 69,81 L 71,74 L 65,69 L 72,69 Z" />
+    <!-- Letter 'E' inside the star -->
     <path
         android:strokeColor="#221A15"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round"
-        android:pathData="M26,14 L26,42" />
+        android:strokeWidth="2"
+        android:strokeLineCap="square"
+        android:pathData="M 73,70 V 76 M 73,70 H 77 M 73,73 H 76 M 73,76 H 77" />
 
-    <!-- Start flag pennant -->
+    <!-- 4. The Bike Outline (Simplified Vector) -->
+    <!-- Rear Wheel -->
     <path
-        android:fillColor="#39662E"
-        android:pathData="M26,14 L41,18.5 L26,23 Z" />
-
-    <!-- Start marker dot, where the flag meets the road -->
-    <path
-        android:fillColor="#39662E"
-        android:strokeColor="#F6E4DB"
+        android:fillColor="#FFF8F5"
+        android:strokeColor="#221A15"
         android:strokeWidth="1.5"
-        android:pathData="M30.5,42a4.5,4.5 0,1 1,-9,0a4.5,4.5 0,1 1,9,0" />
-
-    <!-- End marker star -->
+        android:pathData="M 48,53 A 3,3 0 1,1 47.9,53" />
+    <!-- Front Wheel -->
     <path
-        android:fillColor="#BA1A1A"
-        android:strokeColor="#F6E4DB"
+        android:fillColor="#FFF8F5"
+        android:strokeColor="#221A15"
         android:strokeWidth="1.5"
-        android:strokeLineJoin="round"
-        android:pathData="M82,71 L84.7,78.28 L92.46,78.6 L86.37,83.42 L88.47,90.9 L82,86.6 L75.53,90.9 L77.63,83.42 L71.54,78.6 L79.3,78.28 Z" />
-
-    <!-- Rider silhouette, sitting on the road -->
+        android:pathData="M 62,53 A 3,3 0 1,1 61.9,53" />
+    <!-- Body and Rider -->
     <path
         android:strokeColor="#221A15"
         android:strokeWidth="2"
         android:strokeLineCap="round"
-        android:pathData="M51,71 L58,60 L63,71 M55,64 L61,64" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:strokeColor="#221A15"
-        android:strokeWidth="1.6"
-        android:pathData="M46.8,71a4.2,4.2 0,1 1,8.4,0a4.2,4.2 0,1 1,-8.4,0 M58.8,71a4.2,4.2 0,1 1,8.4,0a4.2,4.2 0,1 1,-8.4,0 M53.5,55a4.5,4.5 0,1 1,9,0a4.5,4.5 0,1 1,-9,0" />
+        android:strokeLineJoin="round"
+        android:pathData="M 48,53 L 55,48 L 62,53 M 55,48 L 53,42 L 58,42 M 54,39 A 2.5,2.5 0 1,1 53.9,39" />
 
+    <!-- 5. The Compass (Top Right) -->
+    <!-- Dark background circle -->
+    <path
+        android:fillColor="#221A15"
+        android:pathData="M 85,15 A 6.5,6.5 0 1,1 84.9,15" />
+    <!-- North Needle (Orange) -->
+    <path
+        android:fillColor="#E8622B"
+        android:pathData="M 85,10.5 L 87.5,15 L 82.5,15 Z" />
+    <!-- South Needle (White) -->
+    <path
+        android:fillColor="#FFF8F5"
+        android:pathData="M 85,19.5 L 87.5,15 L 82.5,15 Z" />
 </vector>

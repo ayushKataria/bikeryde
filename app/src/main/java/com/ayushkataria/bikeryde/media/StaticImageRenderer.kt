@@ -1,23 +1,20 @@
 package com.ayushkataria.bikeryde.media
 
-import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.net.Uri
-import android.os.Build
-import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Composites a ride's route + stats into a single shareable image — the one-frame case of
- * [RouteFrameDrawer], drawn at `progress = 1f` (the full, final route). Near-instant since it's a
- * single Canvas draw, no encoding involved.
+ * Composites a ride's route + stats into a single image — the one-frame case of [RouteFrameDrawer],
+ * drawn at `progress = 1f` (the full, final route). Writes only to app-private storage
+ * ([RenderFileStorage]) — this is a preview; nothing is saved anywhere the user or other apps can
+ * see until they explicitly tap Save on [com.ayushkataria.bikeryde.ui.render.RenderPreviewFragment].
  */
 class StaticImageRenderer(private val context: Context) {
 
-    suspend fun render(data: RideRenderData): Uri {
+    suspend fun render(data: RideRenderData): RenderOutput {
         data.coverImagePath?.let { BackgroundImageCache.preload(listOf(it)) }
         val bitmap = withContext(Dispatchers.Default) {
             Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888).also {
@@ -25,29 +22,11 @@ class StaticImageRenderer(private val context: Context) {
             }
         }
         BackgroundImageCache.clear()
-        return withContext(Dispatchers.IO) { saveToGallery(bitmap) }
-    }
-
-    private fun saveToGallery(bitmap: Bitmap): Uri {
-        val resolver = context.contentResolver
-        val filename = "bikeryde_${System.currentTimeMillis()}.png"
-        val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, filename)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/BikeRyde")
-                put(MediaStore.Images.Media.IS_PENDING, 1)
-            }
+        return withContext(Dispatchers.IO) {
+            val file = RenderFileStorage.newImageFile(context)
+            file.outputStream().use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out) }
+            RenderOutput(RenderFileStorage.uriFor(context, file), file.absolutePath)
         }
-        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-            ?: error("Unable to create MediaStore entry for ride image")
-        resolver.openOutputStream(uri)?.use { out ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
-        }
-        return uri
     }
 
     companion object {

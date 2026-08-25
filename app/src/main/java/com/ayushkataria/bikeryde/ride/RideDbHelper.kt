@@ -79,6 +79,7 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
                 resolution TEXT,
                 fps INTEGER,
                 file_path TEXT,
+                work_id TEXT,
                 created_at INTEGER NOT NULL
             )
             """.trimIndent()
@@ -97,7 +98,7 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
 
     companion object {
         private const val DB_NAME = "bikeryde.db"
-        private const val DB_VERSION = 5
+        private const val DB_VERSION = 6
     }
 }
 

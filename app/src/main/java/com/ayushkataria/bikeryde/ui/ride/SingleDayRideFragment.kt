@@ -24,7 +24,7 @@ import com.ayushkataria.bikeryde.ride.RideStatus
 import com.ayushkataria.bikeryde.ride.RideTrackingService
 import com.ayushkataria.bikeryde.ride.RideTrackingState
 import com.ayushkataria.bikeryde.ride.RideUiState
-import com.ayushkataria.bikeryde.ui.render.RenderEditFragment
+import com.ayushkataria.bikeryde.ui.render.RenderLauncher
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -195,18 +195,12 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
 
     private fun onCreateImageClicked() {
         val rideId = currentRideId ?: return
-        findNavController().navigate(
-            R.id.action_singleDayRide_to_renderEdit,
-            RenderEditFragment.args(rideId, RenderType.IMAGE)
-        )
+        RenderLauncher.open(this, rideId, RenderType.IMAGE)
     }
 
     private fun onCreateAnimationClicked() {
         val rideId = currentRideId ?: return
-        findNavController().navigate(
-            R.id.action_singleDayRide_to_renderEdit,
-            RenderEditFragment.args(rideId, RenderType.VIDEO)
-        )
+        RenderLauncher.open(this, rideId, RenderType.VIDEO)
     }
 
     private fun refreshRideStats(rideId: Long, distanceM: Double, durationS: Long) {

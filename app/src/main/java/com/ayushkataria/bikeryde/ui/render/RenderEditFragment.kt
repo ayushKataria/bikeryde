@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.NavOptions
 import androidx.navigation.fragment.findNavController
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -22,6 +23,7 @@ import androidx.work.WorkManager
 import com.ayushkataria.bikeryde.R
 import com.ayushkataria.bikeryde.media.MergedStop
 import com.ayushkataria.bikeryde.media.RenderImageStorage
+import com.ayushkataria.bikeryde.media.RenderRepository
 import com.ayushkataria.bikeryde.media.RenderType
 import com.ayushkataria.bikeryde.media.RideRenderDataAssembler
 import com.ayushkataria.bikeryde.media.StaticImageRenderer
@@ -34,6 +36,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.launch
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -237,21 +240,29 @@ class RenderEditFragment : Fragment(R.layout.fragment_render_edit) {
 
     private fun generateImage(nameOverrides: Map<Int, String>) {
         viewLifecycleOwner.lifecycleScope.launch {
+            val renderRepository = RenderRepository(requireContext())
+            // This render replaces any previous preview for this ride — delete it now rather
+            // than leaving an orphaned preview file behind in app storage.
+            renderRepository.getLatest(rideId, RenderType.IMAGE)?.filePath?.let { path ->
+                runCatching { File(path).delete() }
+            }
+            val renderId = renderRepository.insertQueued(rideId, RenderType.IMAGE)
+            renderRepository.markProcessing(renderId)
+
             val data = RideRenderDataAssembler(repository).assemble(
                 rideId = rideId,
                 stopNameOverrides = nameOverrides,
                 coverImagePath = coverImagePath
             )
-            val result = data?.let { runCatching { StaticImageRenderer(requireContext()).render(it) }.getOrNull() }
+            val output = data?.let { runCatching { StaticImageRenderer(requireContext()).render(it) }.getOrNull() }
             generateButton.isEnabled = true
-            if (result == null) {
+            if (output == null) {
+                renderRepository.markFailed(renderId)
                 Toast.makeText(requireContext(), R.string.render_image_failed, Toast.LENGTH_LONG).show()
                 return@launch
             }
-            findNavController().navigate(
-                R.id.action_renderEdit_to_renderPreview,
-                RenderPreviewFragment.args(rideId, RenderType.IMAGE, result.toString())
-            )
+            renderRepository.markDone(renderId, output.filePath, StaticImageRenderer.RESOLUTION_LABEL, fps = 0)
+            navigateToPreview(RenderPreviewFragment.args(rideId, RenderType.IMAGE, output.uri.toString()))
         }
     }
 
@@ -260,27 +271,40 @@ class RenderEditFragment : Fragment(R.layout.fragment_render_edit) {
         val namesArray: Array<String?> = Array(stopCount) { i -> nameOverrides[i].orEmpty() }
         val backgroundsArray: Array<String?> = Array(stopCount) { i -> stopBackgroundPaths[i].orEmpty() }
 
+        val request = OneTimeWorkRequestBuilder<VideoRenderWorker>()
+            .setInputData(
+                Data.Builder()
+                    .putLong(VideoRenderWorker.KEY_RIDE_ID, rideId)
+                    .putStringArray(VideoRenderWorker.KEY_STOP_NAMES, namesArray)
+                    .putStringArray(VideoRenderWorker.KEY_STOP_BACKGROUNDS, backgroundsArray)
+                    .putInt(
+                        VideoRenderWorker.KEY_DURATION_SECONDS,
+                        VideoDurationRecommender.apply(recommendedDurationS, durationMultiplier)
+                    )
+                    .build()
+            )
+            .build()
+
+        // REPLACE (not KEEP): this is an explicit user-triggered (re)generate, so it should
+        // always actually run — KEEP would silently no-op if a same-named request were still
+        // pending, leaving the WorkRequest id below pointing at nothing WorkManager ever runs.
         WorkManager.getInstance(requireContext()).enqueueUniqueWork(
             VideoRenderWorker.uniqueWorkName(rideId),
-            ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<VideoRenderWorker>()
-                .setInputData(
-                    Data.Builder()
-                        .putLong(VideoRenderWorker.KEY_RIDE_ID, rideId)
-                        .putStringArray(VideoRenderWorker.KEY_STOP_NAMES, namesArray)
-                        .putStringArray(VideoRenderWorker.KEY_STOP_BACKGROUNDS, backgroundsArray)
-                        .putInt(
-                            VideoRenderWorker.KEY_DURATION_SECONDS,
-                            VideoDurationRecommender.apply(recommendedDurationS, durationMultiplier)
-                        )
-                        .build()
-                )
-                .build()
+            ExistingWorkPolicy.REPLACE,
+            request
         )
         Toast.makeText(requireContext(), R.string.render_video_queued, Toast.LENGTH_SHORT).show()
+        navigateToPreview(RenderPreviewFragment.args(rideId, RenderType.VIDEO, workId = request.id.toString()))
+    }
+
+    /** Pops this customize screen off the back stack on the way to the preview — while a render is
+     * in flight (video) or just finished (image), there's nothing left here to re-submit, so back
+     * from the preview should return to whatever screen opened the render flow, not this form. */
+    private fun navigateToPreview(args: Bundle) {
         findNavController().navigate(
             R.id.action_renderEdit_to_renderPreview,
-            RenderPreviewFragment.args(rideId, RenderType.VIDEO)
+            args,
+            NavOptions.Builder().setPopUpTo(R.id.renderEditFragment, true).build()
         )
     }
 

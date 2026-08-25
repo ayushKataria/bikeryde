@@ -9,20 +9,26 @@ import android.widget.ImageView
 import android.widget.MediaController
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import android.widget.VideoView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.navigation.NavOptions
 import com.ayushkataria.bikeryde.R
+import com.ayushkataria.bikeryde.media.RenderNavigationTarget
 import com.ayushkataria.bikeryde.media.RenderRepository
-import com.ayushkataria.bikeryde.media.RenderStatus
 import com.ayushkataria.bikeryde.media.RenderType
 import com.ayushkataria.bikeryde.media.VideoRenderWorker
 import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.UUID
 
 /**
  * Preview/export screen for a completed (or in-progress) render — the design doc's "tapping opens
@@ -37,18 +43,30 @@ class RenderPreviewFragment : Fragment(R.layout.fragment_render_preview) {
     private lateinit var previewVideo: VideoView
     private lateinit var loadingSpinner: ProgressBar
     private lateinit var statusText: TextView
+    private lateinit var saveButton: MaterialButton
     private lateinit var shareButton: MaterialButton
+    private lateinit var regenerateButton: View
 
     private lateinit var renderRepository: RenderRepository
     private var resultUri: Uri? = null
+    private var rideId: Long = -1L
     private lateinit var renderType: RenderType
+
+    /** Where to save a copy — the render itself only lives in private app storage until the user
+     * picks a real destination here via the system file picker (Storage Access Framework). */
+    private val createDocumentLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("*/*")
+    ) { destinationUri ->
+        if (destinationUri != null) saveResultTo(destinationUri)
+    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val rideId = requireArguments().getLong(ARG_RIDE_ID)
+        rideId = requireArguments().getLong(ARG_RIDE_ID)
         renderType = RenderType.valueOf(requireArguments().getString(ARG_RENDER_TYPE)!!)
         val initialUri = requireArguments().getString(ARG_RESULT_URI)
+        val workId = requireArguments().getString(ARG_WORK_ID)
 
         view.findViewById<TextView>(R.id.topBarTitle).setText(
             if (renderType == RenderType.VIDEO) R.string.post_ride_create_animation else R.string.post_ride_create_image
@@ -59,42 +77,53 @@ class RenderPreviewFragment : Fragment(R.layout.fragment_render_preview) {
         previewVideo = view.findViewById(R.id.previewVideo)
         loadingSpinner = view.findViewById(R.id.loadingSpinner)
         statusText = view.findViewById(R.id.statusText)
+        saveButton = view.findViewById(R.id.saveButton)
         shareButton = view.findViewById(R.id.shareButton)
+        regenerateButton = view.findViewById(R.id.regenerateButton)
+        saveButton.setOnClickListener { launchSavePicker() }
         shareButton.setOnClickListener { shareResult() }
+        regenerateButton.setOnClickListener { regenerate() }
 
         renderRepository = RenderRepository(requireContext())
 
-        if (initialUri != null) {
-            showResult(Uri.parse(initialUri))
-        } else {
-            loadExistingOrFollowWork(rideId)
+        when {
+            initialUri != null -> showResult(Uri.parse(initialUri))
+            // A fresh generate/regenerate just enqueued this exact WorkRequest — follow it
+            // directly rather than asking "what's the latest done render for this ride", which
+            // can still answer with the *previous* render (old file, buttons enabled, no
+            // progress) if this new work hasn't started running yet.
+            workId != null -> followVideoWork(UUID.fromString(workId))
+            else -> loadExistingOrFollowWork(rideId)
         }
     }
 
     private fun loadExistingOrFollowWork(rideId: Long) {
         viewLifecycleOwner.lifecycleScope.launch {
-            val existing = renderRepository.getLatest(rideId, renderType)
-            val filePath = existing?.filePath
-            if (existing?.status == RenderStatus.DONE && filePath != null) {
-                showResult(Uri.parse(filePath))
-                return@launch
-            }
-            if (renderType == RenderType.VIDEO) {
-                followVideoWork(rideId)
-            } else {
-                statusText.visibility = View.VISIBLE
-                statusText.setText(R.string.render_not_available)
-                loadingSpinner.visibility = View.GONE
+            val context = requireContext()
+            when (val target = renderRepository.resolveNavigationTarget(context, rideId, renderType)) {
+                is RenderNavigationTarget.ShowResult -> showResult(target.fileUri)
+                is RenderNavigationTarget.FollowInProgress -> followVideoWork(UUID.fromString(target.workId))
+                RenderNavigationTarget.OpenCustomize -> {
+                    statusText.visibility = View.VISIBLE
+                    statusText.setText(R.string.render_not_available)
+                    loadingSpinner.visibility = View.GONE
+                }
             }
         }
     }
 
-    private fun followVideoWork(rideId: Long) {
+    private fun regenerate() {
+        findNavController().navigate(
+            R.id.renderEditFragment,
+            RenderEditFragment.args(rideId, renderType),
+            NavOptions.Builder().setPopUpTo(R.id.renderPreviewFragment, true).build()
+        )
+    }
+
+    private fun followVideoWork(workId: UUID) {
         statusText.visibility = View.VISIBLE
-        val liveData = WorkManager.getInstance(requireContext())
-            .getWorkInfosForUniqueWorkLiveData(VideoRenderWorker.uniqueWorkName(rideId))
-        liveData.observe(viewLifecycleOwner) { infos ->
-            val info = infos.firstOrNull() ?: return@observe
+        WorkManager.getInstance(requireContext()).getWorkInfoByIdLiveData(workId).observe(viewLifecycleOwner) { info ->
+            if (info == null) return@observe
             when (info.state) {
                 WorkInfo.State.SUCCEEDED -> {
                     val uriString = info.outputData.getString(VideoRenderWorker.KEY_RESULT_URI)
@@ -116,6 +145,7 @@ class RenderPreviewFragment : Fragment(R.layout.fragment_render_preview) {
         resultUri = uri
         loadingSpinner.visibility = View.GONE
         statusText.visibility = View.GONE
+        saveButton.isEnabled = true
         shareButton.isEnabled = true
         if (renderType == RenderType.VIDEO) {
             previewVideo.visibility = View.VISIBLE
@@ -126,6 +156,31 @@ class RenderPreviewFragment : Fragment(R.layout.fragment_render_preview) {
         } else {
             previewImage.visibility = View.VISIBLE
             previewImage.setImageURI(uri)
+        }
+    }
+
+    private fun launchSavePicker() {
+        val timestamp = System.currentTimeMillis()
+        val filename = if (renderType == RenderType.VIDEO) "bikeryde_$timestamp.mp4" else "bikeryde_$timestamp.png"
+        createDocumentLauncher.launch(filename)
+    }
+
+    private fun saveResultTo(destinationUri: Uri) {
+        val sourceUri = resultUri ?: return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val resolver = requireContext().contentResolver
+            val success = withContext(Dispatchers.IO) {
+                runCatching {
+                    resolver.openInputStream(sourceUri)?.use { input ->
+                        resolver.openOutputStream(destinationUri)?.use { output -> input.copyTo(output) }
+                    } ?: error("Unable to open source stream")
+                }.isSuccess
+            }
+            Toast.makeText(
+                requireContext(),
+                if (success) R.string.render_saved else R.string.render_save_failed,
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -149,11 +204,13 @@ class RenderPreviewFragment : Fragment(R.layout.fragment_render_preview) {
         const val ARG_RIDE_ID = "rideId"
         const val ARG_RENDER_TYPE = "renderType"
         const val ARG_RESULT_URI = "resultUri"
+        const val ARG_WORK_ID = "workId"
 
-        fun args(rideId: Long, renderType: RenderType, resultUri: String? = null): Bundle = bundleOf(
+        fun args(rideId: Long, renderType: RenderType, resultUri: String? = null, workId: String? = null): Bundle = bundleOf(
             ARG_RIDE_ID to rideId,
             ARG_RENDER_TYPE to renderType.name,
-            ARG_RESULT_URI to resultUri
+            ARG_RESULT_URI to resultUri,
+            ARG_WORK_ID to workId
         )
     }
 }

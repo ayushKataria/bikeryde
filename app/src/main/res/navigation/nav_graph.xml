@@ -28,6 +28,9 @@
             android:id="@+id/action_home_to_singleDayRide"
             app:destination="@id/singleDayRideFragment" />
         <action
+            android:id="@+id/action_home_to_rideHistory"
+            app:destination="@id/rideHistoryFragment" />
+        <action
             android:id="@+id/action_home_to_comingSoon"
             app:destination="@id/comingSoonFragment" />
         <action
@@ -39,11 +42,28 @@
         android:id="@+id/singleDayRideFragment"
         android:name="com.ayushkataria.bikeryde.ui.ride.SingleDayRideFragment"
         android:label="Single-Day Ride"
-        tools:layout="@layout/fragment_single_day_ride">
+        tools:layout="@layout/fragment_single_day_ride" />
+
+    <fragment
+        android:id="@+id/rideHistoryFragment"
+        android:name="com.ayushkataria.bikeryde.ui.history.RideHistoryFragment"
+        android:label="Ride History"
+        tools:layout="@layout/fragment_ride_history">
 
         <action
-            android:id="@+id/action_singleDayRide_to_renderEdit"
-            app:destination="@id/renderEditFragment" />
+            android:id="@+id/action_rideHistory_to_rideDetail"
+            app:destination="@id/rideDetailFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/rideDetailFragment"
+        android:name="com.ayushkataria.bikeryde.ui.ride.RideDetailFragment"
+        android:label="Ride Detail"
+        tools:layout="@layout/fragment_ride_detail">
+
+        <argument
+            android:name="rideId"
+            app:argType="long" />
     </fragment>
 
     <fragment
@@ -78,6 +98,11 @@
             app:argType="string" />
         <argument
             android:name="resultUri"
+            app:argType="string"
+            app:nullable="true"
+            android:defaultValue="@null" />
+        <argument
+            android:name="workId"
             app:argType="string"
             app:nullable="true"
             android:defaultValue="@null" />

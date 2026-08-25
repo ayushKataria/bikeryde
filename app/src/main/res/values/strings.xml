@@ -53,6 +53,8 @@
     <string name="home_card_planning_subtitle">Weather, food, sightseeing, and lodging suggestions</string>
     <string name="home_card_ride_history_title">Ride History</string>
     <string name="home_card_ride_history_subtitle">Browse past rides and create images or animations for them</string>
+    <string name="ride_history_empty">No completed rides yet. Finish a ride to see it here.</string>
+    <string name="ride_history_row_subtitle_format">%1$s · %2$s</string>
     <string name="home_settings_content_description">Settings</string>
 
     <!-- Post-ride actions (shown after ending a single or multi-day ride) -->
@@ -66,6 +68,10 @@
     <string name="notif_rendering_video_percent">%1$d%%</string>
     <string name="notif_video_ready">Your ride video is ready</string>
     <string name="render_share">Share</string>
+    <string name="render_save">Save</string>
+    <string name="render_regenerate">Regenerate</string>
+    <string name="render_saved">Saved</string>
+    <string name="render_save_failed">Couldn\'t save. Please try again.</string>
     <string name="render_not_available">This render isn\'t available yet.</string>
     <string name="render_failed">Rendering failed. Please try again.</string>
     <string name="render_progress_format">Rendering… %1$d%%</string>
@@ -100,7 +106,6 @@
     <string name="coming_soon_desc_multi_day">Plan and track rides spanning multiple days, with per-day start/pause/end and a stitched trip summary.</string>
     <string name="coming_soon_desc_fuel">Log odometer readings, liters, and cost at each fill-up, with mileage and cost trend charts.</string>
     <string name="coming_soon_desc_planning">Describe a destination and date range to get AI-assisted weather, food, sightseeing, and lodging suggestions.</string>
-    <string name="coming_soon_desc_ride_history">Browse your completed single and multi-day rides, and create or revisit the static image or animation for any of them.</string>
 
     <!-- Settings -->
     <string name="settings_section_api_keys">API Keys</string>
