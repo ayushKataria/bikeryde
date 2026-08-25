@@ -7,8 +7,8 @@ enum class RideType {
 }
 
 /**
- * One day within a multi-day [Ride]. A single-day ride has exactly one of these.
- * Not yet persisted anywhere — modeled ahead of the multi-day tracking feature (design doc §5.2).
+ * One day within a [Ride]. A single-day ride has exactly one of these (dayIndex 0); a multi-day
+ * ride gets one per start/pause-or-end day segment. All [Stop]s and [GpsPoint]s hang off a RideDay.
  */
 data class RideDay(
     val id: Long,

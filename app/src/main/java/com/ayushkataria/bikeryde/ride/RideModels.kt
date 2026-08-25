@@ -17,6 +17,7 @@ enum class RideEventAction {
 
 data class Ride(
     val id: Long,
+    val type: RideType,
     val startTime: Long,
     val endTime: Long?,
     val status: RideStatus,

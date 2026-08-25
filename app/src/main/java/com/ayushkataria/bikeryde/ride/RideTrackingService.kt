@@ -48,6 +48,7 @@ class RideTrackingService : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
     private var rideId: Long? = null
+    private var rideDayId: Long? = null
     private var distanceM = 0.0
     private var accumulatedDurationS = 0L
     private var segmentStartElapsedRealtime = 0L
@@ -60,10 +61,10 @@ class RideTrackingService : Service() {
             val location = result.lastLocation ?: return
             lastLocation?.let { distanceM += it.distanceTo(location) }
             lastLocation = location
-            val id = rideId ?: return
+            val dayId = rideDayId ?: return
             scope.launch {
                 repository.addGpsPoint(
-                    rideId = id,
+                    rideDayId = dayId,
                     timestamp = location.time,
                     lat = location.latitude,
                     lng = location.longitude,
@@ -102,8 +103,9 @@ class RideTrackingService : Service() {
         scope.launch {
             val location = lastLocation ?: getLastKnownLocation()
             val placeName = reverseGeocode(location)
-            val id = repository.startRide(System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
-            rideId = id
+            val session = repository.startRide(System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
+            rideId = session.rideId
+            rideDayId = session.rideDayId
             publishState()
         }
         startLocationUpdates()
@@ -112,6 +114,7 @@ class RideTrackingService : Service() {
 
     private fun onPause() {
         val id = rideId ?: return
+        val dayId = rideDayId ?: return
         if (!isTracking) return
         stopLocationUpdates()
         accumulatedDurationS += elapsedSegmentSeconds()
@@ -121,13 +124,14 @@ class RideTrackingService : Service() {
         scope.launch {
             val location = lastLocation ?: getLastKnownLocation()
             val placeName = reverseGeocode(location)
-            repository.pauseRide(id, System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
+            repository.pauseRide(id, dayId, System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
             publishState()
         }
     }
 
     private fun onResume() {
         val id = rideId ?: return
+        val dayId = rideDayId ?: return
         if (isTracking) return
         val locationAtResume = lastLocation
         lastLocation = null
@@ -139,13 +143,14 @@ class RideTrackingService : Service() {
         scope.launch {
             val location = locationAtResume ?: getLastKnownLocation()
             val placeName = reverseGeocode(location)
-            repository.resumeRide(id, System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
+            repository.resumeRide(id, dayId, System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
             publishState()
         }
     }
 
     private fun onEnd() {
         val id = rideId ?: return
+        val dayId = rideDayId ?: return
         if (isTracking) {
             accumulatedDurationS += elapsedSegmentSeconds()
         }
@@ -160,6 +165,7 @@ class RideTrackingService : Service() {
             val placeName = reverseGeocode(location)
             repository.endRide(
                 rideId = id,
+                rideDayId = dayId,
                 timestamp = System.currentTimeMillis(),
                 lat = location?.latitude,
                 lng = location?.longitude,
@@ -176,6 +182,7 @@ class RideTrackingService : Service() {
                 )
             )
             rideId = null
+            rideDayId = null
             stopForegroundCompat()
             stopSelf()
         }
