@@ -7,13 +7,24 @@ enum class RideType {
 }
 
 /**
+ * Whether a [RideDay] involved riding or was spent in one place — e.g. a rest day or a day set
+ * aside for sightseeing/tourism at the current stop, with no GPS track of its own.
+ */
+enum class RideDayType {
+    TRAVEL,
+    NOT_TRAVEL
+}
+
+/**
  * One day within a [Ride]. A single-day ride has exactly one of these (dayIndex 0); a multi-day
- * ride gets one per start/pause-or-end day segment. All [Stop]s and [GpsPoint]s hang off a RideDay.
+ * ride gets one per start/pause-or-end day segment, plus one per [RideDayType.NOT_TRAVEL] day
+ * spent at a stop. All [Stop]s and [GpsPoint]s hang off a TRAVEL RideDay.
  */
 data class RideDay(
     val id: Long,
     val rideId: Long,
     val dayIndex: Int,
+    val dayType: RideDayType,
     val startTime: Long,
     val endTime: Long?,
     val startPlaceName: String?,

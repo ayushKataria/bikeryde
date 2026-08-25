@@ -57,7 +57,21 @@
     <!-- Post-ride actions (shown after ending a single or multi-day ride) -->
     <string name="post_ride_create_image">Create Static Image</string>
     <string name="post_ride_create_animation">Create Animation</string>
+    <string name="post_ride_creating_image">Creating…</string>
     <string name="settings_icon">⚙</string>
+
+    <!-- Render preview/export -->
+    <string name="notif_channel_render">Ride rendering</string>
+    <string name="notif_rendering_video">Rendering ride video</string>
+    <string name="notif_rendering_video_percent">%1$d%%</string>
+    <string name="notif_video_ready">Your ride video is ready</string>
+    <string name="render_share">Share</string>
+    <string name="render_not_available">This render isn\'t available yet.</string>
+    <string name="render_failed">Rendering failed. Please try again.</string>
+    <string name="render_progress_format">Rendering… %1$d%%</string>
+    <string name="render_image_saved">Image saved to Pictures/BikeRyde</string>
+    <string name="render_image_failed">Couldn\'t create the image. Please try again.</string>
+    <string name="render_video_queued">Rendering your ride video in the background…</string>
 
     <!-- Coming soon placeholder -->
     <string name="coming_soon_icon">🚧</string>
@@ -65,8 +79,6 @@
     <string name="coming_soon_desc_multi_day">Plan and track rides spanning multiple days, with per-day start/pause/end and a stitched trip summary.</string>
     <string name="coming_soon_desc_fuel">Log odometer readings, liters, and cost at each fill-up, with mileage and cost trend charts.</string>
     <string name="coming_soon_desc_planning">Describe a destination and date range to get AI-assisted weather, food, sightseeing, and lodging suggestions.</string>
-    <string name="coming_soon_desc_static_image">Compose a route map and stats overlay into a shareable image for this ride.</string>
-    <string name="coming_soon_desc_animation">Render an animated video of this ride\'s route with running distance, time, and stop labels.</string>
     <string name="coming_soon_desc_ride_history">Browse your completed single and multi-day rides, and create or revisit the static image or animation for any of them.</string>
 
     <!-- Settings -->

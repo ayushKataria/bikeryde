@@ -42,6 +42,7 @@ class RideRepository(context: Context) {
                 ContentValues().apply {
                     put("ride_id", rideId)
                     put("day_index", 0)
+                    put("day_type", RideDayType.TRAVEL.name)
                     put("start_time", startTime)
                     put("start_place_name", placeName)
                     put("distance_km", 0.0)
@@ -51,6 +52,33 @@ class RideRepository(context: Context) {
             insertStop(db, rideDayId, RideEventAction.START, startTime, lat, lng, placeName)
             RideSession(rideId, rideDayId)
         }
+
+    /**
+     * Records a [RideDayType.NOT_TRAVEL] day within a multi-day [Ride] — a rest or tourism day
+     * spent at the current stop, with no GPS track or [Stop]s of its own.
+     */
+    suspend fun addNotTravelDay(
+        rideId: Long,
+        dayIndex: Int,
+        date: Long,
+        placeName: String?
+    ): Long = withContext(Dispatchers.IO) {
+        dbHelper.writableDatabase.insert(
+            "ride_day",
+            null,
+            ContentValues().apply {
+                put("ride_id", rideId)
+                put("day_index", dayIndex)
+                put("day_type", RideDayType.NOT_TRAVEL.name)
+                put("start_time", date)
+                put("end_time", date)
+                put("start_place_name", placeName)
+                put("end_place_name", placeName)
+                put("distance_km", 0.0)
+                put("duration_s", 0L)
+            }
+        )
+    }
 
     suspend fun pauseRide(
         rideId: Long,
@@ -225,6 +253,25 @@ class RideRepository(context: Context) {
         }
     }
 
+    /** All days (travel and not-travel) for a ride, in day order. */
+    suspend fun getRideDays(rideId: Long): List<RideDay> = withContext(Dispatchers.IO) {
+        dbHelper.readableDatabase.query(
+            "ride_day",
+            null,
+            "ride_id = ?",
+            arrayOf(rideId.toString()),
+            null,
+            null,
+            "day_index ASC"
+        ).use { cursor ->
+            val days = mutableListOf<RideDay>()
+            while (cursor.moveToNext()) {
+                days += cursor.toRideDay()
+            }
+            days
+        }
+    }
+
     private fun setStatus(db: SQLiteDatabase, rideId: Long, status: RideStatus) {
         db.update(
             "ride",
@@ -265,5 +312,18 @@ class RideRepository(context: Context) {
         status = RideStatus.valueOf(getString(getColumnIndexOrThrow("status"))),
         totalDistanceM = getDouble(getColumnIndexOrThrow("total_distance_m")),
         totalDurationS = getLong(getColumnIndexOrThrow("total_duration_s"))
+    )
+
+    private fun Cursor.toRideDay(): RideDay = RideDay(
+        id = getLong(getColumnIndexOrThrow("id")),
+        rideId = getLong(getColumnIndexOrThrow("ride_id")),
+        dayIndex = getInt(getColumnIndexOrThrow("day_index")),
+        dayType = RideDayType.valueOf(getString(getColumnIndexOrThrow("day_type"))),
+        startTime = getLong(getColumnIndexOrThrow("start_time")),
+        endTime = if (isNull(getColumnIndexOrThrow("end_time"))) null else getLong(getColumnIndexOrThrow("end_time")),
+        startPlaceName = getString(getColumnIndexOrThrow("start_place_name")),
+        endPlaceName = getString(getColumnIndexOrThrow("end_place_name")),
+        distanceKm = getDouble(getColumnIndexOrThrow("distance_km")),
+        durationS = getLong(getColumnIndexOrThrow("duration_s"))
     )
 }

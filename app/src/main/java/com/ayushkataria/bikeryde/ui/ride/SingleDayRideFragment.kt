@@ -13,14 +13,21 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import androidx.core.os.bundleOf
 import androidx.core.view.isEmpty
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
+import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.ayushkataria.bikeryde.R
+import com.ayushkataria.bikeryde.media.RenderType
+import com.ayushkataria.bikeryde.media.RideRenderDataAssembler
+import com.ayushkataria.bikeryde.media.StaticImageRenderer
+import com.ayushkataria.bikeryde.media.VideoRenderWorker
 import com.ayushkataria.bikeryde.ride.RideEvent
 import com.ayushkataria.bikeryde.ride.RideEventAction
 import com.ayushkataria.bikeryde.ride.RideRepository
@@ -28,7 +35,7 @@ import com.ayushkataria.bikeryde.ride.RideStatus
 import com.ayushkataria.bikeryde.ride.RideTrackingService
 import com.ayushkataria.bikeryde.ride.RideTrackingState
 import com.ayushkataria.bikeryde.ride.RideUiState
-import com.ayushkataria.bikeryde.ui.placeholder.ComingSoonFragment
+import com.ayushkataria.bikeryde.ui.render.RenderPreviewFragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -59,6 +66,7 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
     private lateinit var repository: RideRepository
 
     private var pendingStart = false
+    private var currentRideId: Long? = null
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -113,12 +121,8 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
         startButton.setOnClickListener { onStartClicked() }
         pauseResumeButton.setOnClickListener { onPauseResumeClicked() }
         endButton.setOnClickListener { onEndClicked() }
-        createImageButton.setOnClickListener {
-            navigateToComingSoon(R.string.post_ride_create_image, R.string.coming_soon_desc_static_image)
-        }
-        createAnimationButton.setOnClickListener {
-            navigateToComingSoon(R.string.post_ride_create_animation, R.string.coming_soon_desc_animation)
-        }
+        createImageButton.setOnClickListener { onCreateImageClicked() }
+        createAnimationButton.setOnClickListener { onCreateAnimationClicked() }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -189,10 +193,49 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
         }
 
         val rideId = state.rideId
+        currentRideId = rideId
         rideStatsSection.visibility = if (rideId != null) View.VISIBLE else View.GONE
         if (rideId != null) {
             refreshRideStats(rideId, state.distanceM, state.durationS)
         }
+    }
+
+    private fun onCreateImageClicked() {
+        val rideId = currentRideId ?: return
+        createImageButton.isEnabled = false
+        createImageButton.setText(R.string.post_ride_creating_image)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val data = RideRenderDataAssembler(repository).assemble(rideId)
+            val result = data?.let {
+                runCatching { StaticImageRenderer(requireContext()).render(it) }.getOrNull()
+            }
+            createImageButton.isEnabled = true
+            createImageButton.setText(R.string.post_ride_create_image)
+            if (result == null) {
+                Toast.makeText(requireContext(), R.string.render_image_failed, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            findNavController().navigate(
+                R.id.action_singleDayRide_to_renderPreview,
+                RenderPreviewFragment.args(rideId, RenderType.IMAGE, result.toString())
+            )
+        }
+    }
+
+    private fun onCreateAnimationClicked() {
+        val rideId = currentRideId ?: return
+        WorkManager.getInstance(requireContext()).enqueueUniqueWork(
+            VideoRenderWorker.uniqueWorkName(rideId),
+            ExistingWorkPolicy.KEEP,
+            OneTimeWorkRequestBuilder<VideoRenderWorker>()
+                .setInputData(Data.Builder().putLong(VideoRenderWorker.KEY_RIDE_ID, rideId).build())
+                .build()
+        )
+        Toast.makeText(requireContext(), R.string.render_video_queued, Toast.LENGTH_SHORT).show()
+        findNavController().navigate(
+            R.id.action_singleDayRide_to_renderPreview,
+            RenderPreviewFragment.args(rideId, RenderType.VIDEO)
+        )
     }
 
     private fun refreshRideStats(rideId: Long, distanceM: Double, durationS: Long) {
@@ -277,14 +320,4 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
 
     private fun formatDistance(distanceM: Double): String =
         String.format(Locale.US, "%.2f km", distanceM / 1000.0)
-
-    private fun navigateToComingSoon(titleRes: Int, descriptionRes: Int) {
-        findNavController().navigate(
-            R.id.comingSoonFragment,
-            bundleOf(
-                ComingSoonFragment.ARG_TITLE to getString(titleRes),
-                ComingSoonFragment.ARG_DESCRIPTION to getString(descriptionRes)
-            )
-        )
-    }
 }

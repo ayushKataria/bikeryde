@@ -1,10 +1,14 @@
 package com.ayushkataria.bikeryde
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.navigation.fragment.NavHostFragment
+import com.ayushkataria.bikeryde.media.RenderType
+import com.ayushkataria.bikeryde.ui.render.RenderPreviewFragment
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,5 +20,28 @@ class MainActivity : AppCompatActivity() {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
+        handleOpenRenderIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleOpenRenderIntent(intent)
+    }
+
+    /** Deep-links in from the "your ride video is ready" notification (see [com.ayushkataria.bikeryde.media.RenderNotifications]). */
+    private fun handleOpenRenderIntent(intent: Intent) {
+        val rideId = intent.getLongExtra(EXTRA_OPEN_RENDER_RIDE_ID, -1L)
+        if (rideId == -1L) return
+        val renderType = intent.getStringExtra(EXTRA_OPEN_RENDER_TYPE)?.let(RenderType::valueOf) ?: return
+        val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+        navHostFragment?.navController?.navigate(
+            R.id.renderPreviewFragment,
+            RenderPreviewFragment.args(rideId, renderType)
+        )
+    }
+
+    companion object {
+        const val EXTRA_OPEN_RENDER_RIDE_ID = "openRenderRideId"
+        const val EXTRA_OPEN_RENDER_TYPE = "openRenderType"
     }
 }

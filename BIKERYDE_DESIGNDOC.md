@@ -105,9 +105,12 @@ totalDistanceKm, totalDurationS, coverPhotoId
 
 **RideDay** (one row per day; a single-day ride has exactly one)
 ```
-id, rideId, dayIndex, startTime, endTime,
+id, rideId, dayIndex, dayType (TRAVEL | NOT_TRAVEL), startTime, endTime,
 startPlaceName, endPlaceName, distanceKm, durationS
 ```
+A `NOT_TRAVEL` day marks a day within a multi-day trip spent at the current stop with no
+riding — a rest day or a day set aside for sightseeing/tourism. It has no `Stop`s or `GpsPoint`s
+of its own; `startPlaceName`/`endPlaceName` are the same place, and `distanceKm`/`durationS` are 0.
 
 **Stop** (from explicit start/pause/end user actions)
 ```
@@ -162,6 +165,10 @@ aiMode (LOCAL | CLOUD), driveSyncEnabled (Boolean), units (KM | MI)
 - Per day: **Start day** → tracking → **Pause day** (end of riding for that day) or **End day** if final
 - Each start/pause/end action captures a `Stop` (timestamp + lat/lng), reverse-geocoded once to a place name, cached locally in Room so repeat renders don't re-query
 - **End trip** closes out the whole multi-day ride and triggers the trip summary
+- A day can also be logged as **not travelling** — a rest day or a day spent sightseeing/touring at
+  the current stop, with no start/pause/end tracking. This creates a `NOT_TRAVEL` `RideDay` (same
+  start/end place, zero distance/duration) so trip summaries and the multi-day video can label it
+  distinctly from a travel day, instead of it just appearing as an untracked gap between two days
 
 **Still-riding safety check:** while a day-segment is active, if no significant GPS movement is detected for 30+ minutes (checked via a periodic `WorkManager` task or timer inside the foreground service), fire a notification: "Still riding? Tap to keep tracking, or end your day."
 
@@ -171,7 +178,7 @@ aiMode (LOCAL | CLOUD), driveSyncEnabled (Boolean), units (KM | MI)
 - **Animated video**: queued as a `WorkManager` background job
   - `ForegroundService` + persistent notification: "Rendering ride video… 42%"
   - On completion: notification "Your ride video is ready" → tapping opens preview/export screen
-  - Multi-day video animates the stitched route day by day, with place-name labels appearing at each recorded stop, plus running totals for distance and time on road
+  - Multi-day video animates the stitched route day by day, with place-name labels appearing at each recorded stop, plus running totals for distance and time on road; `NOT_TRAVEL` days are shown as a labeled pause at that stop (e.g. "Day 3 — resting in Manali") rather than being skipped
   - User-selected photos layered as backgrounds behind map/stat overlays during compositing
   - Rendering pipeline: `MediaCodec` (or Media3 Transformer as the higher-level wrapper) for hardware-accelerated encoding — target 1080p60, automatic fallback to 1080p30 on devices where the hardware encoder can't sustain 60fps at that resolution
 - Export: `MediaStore` save to gallery + `Intent.ACTION_SEND` share sheet (Instagram, etc.)

@@ -33,6 +33,7 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ride_id INTEGER NOT NULL,
                 day_index INTEGER NOT NULL,
+                day_type TEXT NOT NULL DEFAULT 'TRAVEL',
                 start_time INTEGER NOT NULL,
                 end_time INTEGER,
                 start_place_name TEXT,
@@ -68,9 +69,24 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
             )
             """.trimIndent()
         )
+        db.execSQL(
+            """
+            CREATE TABLE render (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ride_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                resolution TEXT,
+                fps INTEGER,
+                file_path TEXT,
+                created_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        db.execSQL("DROP TABLE IF EXISTS render")
         db.execSQL("DROP TABLE IF EXISTS gps_point")
         db.execSQL("DROP TABLE IF EXISTS stop")
         db.execSQL("DROP TABLE IF EXISTS ride_event")
@@ -81,7 +97,7 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
 
     companion object {
         private const val DB_NAME = "bikeryde.db"
-        private const val DB_VERSION = 3
+        private const val DB_VERSION = 5
     }
 }
 
