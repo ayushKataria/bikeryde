@@ -75,16 +75,16 @@ class RouteMapView @JvmOverloads constructor(
 
         val padding = 32f
         val bounds = RectF(padding, padding, width - padding, height - padding)
-        val geoBounds = RouteProjection.geoBoundsOf(points)
+        val viewport = RouteProjection.viewportFor(points, bounds)
 
-        val projected = points.map { RouteProjection.project(it, geoBounds, bounds) }
+        val projected = points.map { viewport.project(it) }
         canvas.drawPath(RouteProjection.smoothedPath(projected), routePaint)
 
         events.forEach { event ->
             val lat = event.lat
             val lng = event.lng
             if (lat == null || lng == null) return@forEach
-            val point = RouteProjection.project(RidePoint(lat, lng, null), geoBounds, bounds)
+            val point = viewport.project(RidePoint(lat, lng, null))
             markerPaint.color = markerColorFor(event.action)
             canvas.drawCircle(point.x, point.y, MARKER_RADIUS, markerPaint)
             canvas.drawCircle(point.x, point.y, MARKER_RADIUS, markerStrokePaint)

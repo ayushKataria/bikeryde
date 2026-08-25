@@ -5,43 +5,30 @@ import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.os.Build
 import android.os.Bundle
-import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import androidx.core.view.isEmpty
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
-import androidx.work.Data
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 import com.ayushkataria.bikeryde.R
 import com.ayushkataria.bikeryde.media.RenderType
-import com.ayushkataria.bikeryde.media.RideRenderDataAssembler
-import com.ayushkataria.bikeryde.media.StaticImageRenderer
-import com.ayushkataria.bikeryde.media.VideoRenderWorker
-import com.ayushkataria.bikeryde.ride.RideEvent
 import com.ayushkataria.bikeryde.ride.RideEventAction
 import com.ayushkataria.bikeryde.ride.RideRepository
 import com.ayushkataria.bikeryde.ride.RideStatus
 import com.ayushkataria.bikeryde.ride.RideTrackingService
 import com.ayushkataria.bikeryde.ride.RideTrackingState
 import com.ayushkataria.bikeryde.ride.RideUiState
-import com.ayushkataria.bikeryde.ui.render.RenderPreviewFragment
+import com.ayushkataria.bikeryde.ui.render.RenderEditFragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
 
@@ -57,6 +44,7 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
     private lateinit var createImageButton: MaterialButton
     private lateinit var createAnimationButton: MaterialButton
     private lateinit var rideStatsSection: LinearLayout
+    private lateinit var totalTimeText: TextView
     private lateinit var avgSpeedText: TextView
     private lateinit var maxSpeedText: TextView
     private lateinit var stopsCountText: TextView
@@ -64,6 +52,7 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
     private lateinit var stopsLegend: LinearLayout
 
     private lateinit var repository: RideRepository
+    private lateinit var legendBinder: StopsLegendBinder
 
     private var pendingStart = false
     private var currentRideId: Long? = null
@@ -101,20 +90,23 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
         createImageButton = view.findViewById(R.id.createImageButton)
         createAnimationButton = view.findViewById(R.id.createAnimationButton)
         rideStatsSection = view.findViewById(R.id.rideStatsSection)
+        totalTimeText = view.findViewById(R.id.totalTimeText)
         avgSpeedText = view.findViewById(R.id.avgSpeedText)
         maxSpeedText = view.findViewById(R.id.maxSpeedText)
         stopsCountText = view.findViewById(R.id.stopsCountText)
         routeMapView = view.findViewById(R.id.routeMapView)
         stopsLegend = view.findViewById(R.id.stopsLegend)
 
+        legendBinder = StopsLegendBinder(requireContext(), stopsLegend)
+
         routeMapView.setRouteColor(MaterialColors.getColor(routeMapView, com.google.android.material.R.attr.colorPrimary))
         routeMapView.setEmptyTextColor(
             MaterialColors.getColor(routeMapView, com.google.android.material.R.attr.colorOnSurfaceVariant)
         )
         routeMapView.setMarkerColors(
-            start = colorForStopAction(RideEventAction.START),
-            pauseResume = colorForStopAction(RideEventAction.PAUSE),
-            end = colorForStopAction(RideEventAction.END)
+            start = legendBinder.colorForStopAction(RideEventAction.START),
+            pauseResume = legendBinder.colorForStopAction(RideEventAction.PAUSE),
+            end = legendBinder.colorForStopAction(RideEventAction.END)
         )
         repository = RideRepository(requireContext())
 
@@ -166,8 +158,9 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
     }
 
     private fun render(state: RideUiState) {
-        durationText.text = formatDuration(state.durationS)
-        distanceText.text = formatDistance(state.distanceM)
+        durationText.text = RideStatsFormat.duration(state.durationS)
+        distanceText.text = RideStatsFormat.distance(state.distanceM)
+        totalTimeText.text = RideStatsFormat.duration(state.totalTimeS)
 
         val (statusLabel, statusColorRes) = when (state.status) {
             RideStatus.TRACKING -> R.string.status_tracking to R.color.status_tracking
@@ -202,39 +195,17 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
 
     private fun onCreateImageClicked() {
         val rideId = currentRideId ?: return
-        createImageButton.isEnabled = false
-        createImageButton.setText(R.string.post_ride_creating_image)
-        viewLifecycleOwner.lifecycleScope.launch {
-            val data = RideRenderDataAssembler(repository).assemble(rideId)
-            val result = data?.let {
-                runCatching { StaticImageRenderer(requireContext()).render(it) }.getOrNull()
-            }
-            createImageButton.isEnabled = true
-            createImageButton.setText(R.string.post_ride_create_image)
-            if (result == null) {
-                Toast.makeText(requireContext(), R.string.render_image_failed, Toast.LENGTH_LONG).show()
-                return@launch
-            }
-            findNavController().navigate(
-                R.id.action_singleDayRide_to_renderPreview,
-                RenderPreviewFragment.args(rideId, RenderType.IMAGE, result.toString())
-            )
-        }
+        findNavController().navigate(
+            R.id.action_singleDayRide_to_renderEdit,
+            RenderEditFragment.args(rideId, RenderType.IMAGE)
+        )
     }
 
     private fun onCreateAnimationClicked() {
         val rideId = currentRideId ?: return
-        WorkManager.getInstance(requireContext()).enqueueUniqueWork(
-            VideoRenderWorker.uniqueWorkName(rideId),
-            ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<VideoRenderWorker>()
-                .setInputData(Data.Builder().putLong(VideoRenderWorker.KEY_RIDE_ID, rideId).build())
-                .build()
-        )
-        Toast.makeText(requireContext(), R.string.render_video_queued, Toast.LENGTH_SHORT).show()
         findNavController().navigate(
-            R.id.action_singleDayRide_to_renderPreview,
-            RenderPreviewFragment.args(rideId, RenderType.VIDEO)
+            R.id.action_singleDayRide_to_renderEdit,
+            RenderEditFragment.args(rideId, RenderType.VIDEO)
         )
     }
 
@@ -251,73 +222,10 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
             maxSpeedText.text = maxSpeedMps?.let { formatSpeed(it * 3.6) } ?: getString(R.string.value_placeholder_speed)
             stopsCountText.text = events.size.toString()
 
-            renderStopsLegend(events)
+            legendBinder.render(events)
         }
     }
 
-    private fun renderStopsLegend(events: List<RideEvent>) {
-        stopsLegend.removeAllViews()
-        val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-        events.forEach { event ->
-            val row = LinearLayout(requireContext()).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = if (stopsLegend.isEmpty()) 0 else dpToPx(10) }
-            }
-            val dot = View(requireContext()).apply {
-                layoutParams = LinearLayout.LayoutParams(dpToPx(8), dpToPx(8))
-                background = ContextCompat.getDrawable(requireContext(), R.drawable.bg_status_dot)
-                backgroundTintList = ColorStateList.valueOf(colorForStopAction(event.action))
-            }
-            val label = TextView(requireContext()).apply {
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    marginStart = dpToPx(10)
-                }
-                text = getString(
-                    R.string.stop_legend_row_format,
-                    stopActionLabel(event.action),
-                    event.placeName ?: getString(R.string.unknown_location),
-                    timeFormat.format(event.timestamp)
-                )
-                setTextColor(MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface))
-                textSize = 14f
-            }
-            row.addView(dot)
-            row.addView(label)
-            stopsLegend.addView(row)
-        }
-    }
-
-    private fun stopActionLabel(action: RideEventAction): String = when (action) {
-        RideEventAction.START -> getString(R.string.stop_action_start)
-        RideEventAction.PAUSE -> getString(R.string.stop_action_pause)
-        RideEventAction.RESUME -> getString(R.string.stop_action_resume)
-        RideEventAction.END -> getString(R.string.stop_action_end)
-    }
-
-    private fun colorForStopAction(action: RideEventAction): Int = ContextCompat.getColor(
-        requireContext(),
-        when (action) {
-            RideEventAction.START -> R.color.status_tracking
-            RideEventAction.END -> R.color.md_error
-            RideEventAction.PAUSE, RideEventAction.RESUME -> R.color.status_paused
-        }
-    )
-
-    private fun formatSpeed(kmh: Double): String = getString(R.string.speed_unit_format, String.format(Locale.US, "%.1f", kmh))
-
-    private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
-
-    private fun formatDuration(totalSeconds: Long): String {
-        val hours = totalSeconds / 3600
-        val minutes = (totalSeconds % 3600) / 60
-        val seconds = totalSeconds % 60
-        return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
-    }
-
-    private fun formatDistance(distanceM: Double): String =
-        String.format(Locale.US, "%.2f km", distanceM / 1000.0)
+    private fun formatSpeed(kmh: Double): String =
+        getString(R.string.speed_unit_format, String.format(java.util.Locale.US, "%.1f", kmh))
 }

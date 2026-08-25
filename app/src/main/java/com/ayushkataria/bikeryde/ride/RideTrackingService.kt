@@ -49,6 +49,7 @@ class RideTrackingService : Service() {
 
     private var rideId: Long? = null
     private var rideDayId: Long? = null
+    private var rideStartTimeMs: Long? = null
     private var distanceM = 0.0
     private var accumulatedDurationS = 0L
     private var segmentStartElapsedRealtime = 0L
@@ -101,11 +102,13 @@ class RideTrackingService : Service() {
         isTracking = true
         segmentStartElapsedRealtime = SystemClock.elapsedRealtime()
         scope.launch {
+            val startTimeMs = System.currentTimeMillis()
             val location = lastLocation ?: getLastKnownLocation()
             val placeName = reverseGeocode(location)
-            val session = repository.startRide(System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
+            val session = repository.startRide(startTimeMs, location?.latitude, location?.longitude, placeName)
             rideId = session.rideId
             rideDayId = session.rideDayId
+            rideStartTimeMs = startTimeMs
             publishState()
         }
         startLocationUpdates()
@@ -119,7 +122,7 @@ class RideTrackingService : Service() {
         stopLocationUpdates()
         accumulatedDurationS += elapsedSegmentSeconds()
         isTracking = false
-        tickerJob?.cancel()
+        // Ticker keeps running through the pause — total time (unlike time on road) keeps counting.
         updateNotification(getString(R.string.notif_ride_paused))
         scope.launch {
             val location = lastLocation ?: getLastKnownLocation()
@@ -159,6 +162,8 @@ class RideTrackingService : Service() {
         tickerJob?.cancel()
         val finalDistance = distanceM
         val finalDuration = accumulatedDurationS
+        val endTimeMs = System.currentTimeMillis()
+        val finalTotalTimeS = rideStartTimeMs?.let { (endTimeMs - it) / 1000 } ?: finalDuration
         val locationAtEnd = lastLocation
         scope.launch {
             val location = locationAtEnd ?: getLastKnownLocation()
@@ -166,7 +171,7 @@ class RideTrackingService : Service() {
             repository.endRide(
                 rideId = id,
                 rideDayId = dayId,
-                timestamp = System.currentTimeMillis(),
+                timestamp = endTimeMs,
                 lat = location?.latitude,
                 lng = location?.longitude,
                 placeName = placeName,
@@ -178,11 +183,13 @@ class RideTrackingService : Service() {
                     rideId = id,
                     status = RideStatus.COMPLETED,
                     distanceM = finalDistance,
-                    durationS = finalDuration
+                    durationS = finalDuration,
+                    totalTimeS = finalTotalTimeS
                 )
             )
             rideId = null
             rideDayId = null
+            rideStartTimeMs = null
             stopForegroundCompat()
             stopSelf()
         }
@@ -233,12 +240,14 @@ class RideTrackingService : Service() {
     private fun publishState() {
         val id = rideId ?: return
         val liveDuration = accumulatedDurationS + if (isTracking) elapsedSegmentSeconds() else 0L
+        val liveTotalTime = rideStartTimeMs?.let { (System.currentTimeMillis() - it) / 1000 } ?: 0L
         RideTrackingState.update(
             RideUiState(
                 rideId = id,
                 status = if (isTracking) RideStatus.TRACKING else RideStatus.PAUSED,
                 distanceM = distanceM,
-                durationS = liveDuration
+                durationS = liveDuration,
+                totalTimeS = liveTotalTime
             )
         )
     }

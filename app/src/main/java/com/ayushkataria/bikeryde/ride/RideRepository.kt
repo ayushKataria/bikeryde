@@ -245,6 +245,23 @@ class RideRepository(context: Context) {
         }
     }
 
+    /** Completed rides, most recent first — the ride history list. */
+    suspend fun getCompletedRides(): List<Ride> = withContext(Dispatchers.IO) {
+        dbHelper.readableDatabase.query(
+            "ride",
+            null,
+            "status = ?",
+            arrayOf(RideStatus.COMPLETED.name),
+            null,
+            null,
+            "start_time DESC"
+        ).use { cursor ->
+            val rides = mutableListOf<Ride>()
+            while (cursor.moveToNext()) rides += cursor.toRide()
+            rides
+        }
+    }
+
     suspend fun getRide(rideId: Long): Ride? = withContext(Dispatchers.IO) {
         dbHelper.readableDatabase.query(
             "ride", null, "id = ?", arrayOf(rideId.toString()), null, null, null

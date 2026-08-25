@@ -20,6 +20,7 @@
     <string name="label_time_on_road">Time on Road</string>
     <string name="section_ride_stats">Ride Stats</string>
     <string name="section_route">Route</string>
+    <string name="label_total_time">Total Time</string>
     <string name="label_avg_speed">Avg Speed</string>
     <string name="label_max_speed">Max Speed</string>
     <string name="label_stops">Stops</string>
@@ -57,7 +58,6 @@
     <!-- Post-ride actions (shown after ending a single or multi-day ride) -->
     <string name="post_ride_create_image">Create Static Image</string>
     <string name="post_ride_create_animation">Create Animation</string>
-    <string name="post_ride_creating_image">Creating…</string>
     <string name="settings_icon">⚙</string>
 
     <!-- Render preview/export -->
@@ -72,6 +72,27 @@
     <string name="render_image_saved">Image saved to Pictures/BikeRyde</string>
     <string name="render_image_failed">Couldn\'t create the image. Please try again.</string>
     <string name="render_video_queued">Rendering your ride video in the background…</string>
+
+    <!-- Render customize screen -->
+    <string name="render_edit_title_image">Customize Image</string>
+    <string name="render_edit_title_video">Customize Animation</string>
+    <string name="render_edit_cover_section">Background Photo</string>
+    <string name="render_edit_add_photo">Add Photo</string>
+    <string name="render_edit_change_photo">Change Photo</string>
+    <string name="render_edit_remove_photo">Remove photo</string>
+    <string name="render_edit_video_background_hint">Add a photo to any stop below — they\'ll fade into each other as the video plays.</string>
+    <string name="render_edit_length_section">Video Length</string>
+    <string name="render_edit_length_value_recommended_format">%1$ds · recommended for this ride</string>
+    <string name="render_edit_length_value_multiplier_format">%1$ds · %2$s recommended length</string>
+    <string name="render_edit_length_slider_description">Video length multiplier</string>
+    <string name="render_edit_length_shorter">Shorter</string>
+    <string name="render_edit_length_longer">Longer</string>
+    <string name="render_edit_stops_section">Stop Names</string>
+    <string name="render_edit_stops_hint">Rename any stop — use a nickname like \"Home\" instead of the recorded place name.</string>
+    <string name="render_edit_stops_empty">This ride has no recorded stops yet.</string>
+    <string name="render_edit_generate">Generate</string>
+    <string name="render_edit_stop_name_hint">Stop name</string>
+    <string name="render_edit_add_stop_photo">Add photo</string>
 
     <!-- Coming soon placeholder -->
     <string name="coming_soon_icon">🚧</string>

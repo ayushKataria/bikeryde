@@ -42,7 +42,25 @@
         tools:layout="@layout/fragment_single_day_ride">
 
         <action
-            android:id="@+id/action_singleDayRide_to_renderPreview"
+            android:id="@+id/action_singleDayRide_to_renderEdit"
+            app:destination="@id/renderEditFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/renderEditFragment"
+        android:name="com.ayushkataria.bikeryde.ui.render.RenderEditFragment"
+        android:label="Customize"
+        tools:layout="@layout/fragment_render_edit">
+
+        <argument
+            android:name="rideId"
+            app:argType="long" />
+        <argument
+            android:name="renderType"
+            app:argType="string" />
+
+        <action
+            android:id="@+id/action_renderEdit_to_renderPreview"
             app:destination="@id/renderPreviewFragment" />
     </fragment>
 

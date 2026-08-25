@@ -46,7 +46,9 @@ data class RideUiState(
     val rideId: Long? = null,
     val status: RideStatus? = null,
     val distanceM: Double = 0.0,
-    val durationS: Long = 0L
+    val durationS: Long = 0L,
+    /** Wall-clock time from ride start to now (or to end, once completed) — unlike [durationS], this includes pauses. */
+    val totalTimeS: Long = 0L
 ) {
     val isActive: Boolean get() = status == RideStatus.TRACKING || status == RideStatus.PAUSED
 }
