@@ -1,21 +1,20 @@
 package com.ayushkataria.bikeryde.media
 
+import com.ayushkataria.bikeryde.ride.RideDayType
+import com.ayushkataria.bikeryde.ride.RideEventAction
 import com.ayushkataria.bikeryde.ride.RideRepository
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 /**
- * Builds the [RideRenderData] for a ride. Today every ride is single-day, so this always produces
- * one [RenderDay] covering the whole route. Once multi-day tracking exists, this is the only place
- * that needs to change — swap the single [RideDay] lookup for [RideRepository.getRideDays] and
- * build one [RenderDay] per row — [RouteFrameDrawer], [StaticImageRenderer] and [VideoRenderWorker]
- * all already operate on the day list, not on a single-day assumption.
+ * Builds the [RideRenderData] for a ride — one [RenderDay] per travel [RideDay], so a multi-day
+ * trip's video/image shows its route day by day instead of one undifferentiated line.
  */
 class RideRenderDataAssembler(private val rideRepository: RideRepository) {
 
     /**
      * @param stopNameOverrides custom labels from the customize screen, keyed by each merged
-     *   stop's position in [StopGrouping.merge]'s (chronological) order — a Start immediately
+     *   stop's position in [mergedStopsForRide]'s (chronological) order — a Start immediately
      *   followed by a Pause at the same place is one entry, not two. Empty/absent falls back to
      *   the recorded place name.
      * @param stopBackgroundPaths per-merged-stop background photo paths, same keying, video only.
@@ -32,22 +31,44 @@ class RideRenderDataAssembler(private val rideRepository: RideRepository) {
         coverImagePath: String? = null
     ): RideRenderData? {
         val ride = rideRepository.getRide(rideId) ?: return null
-        val points = rideRepository.getRoutePoints(rideId)
-        val mergedStops = StopGrouping.merge(rideRepository.getEvents(rideId))
+        val rideDays = rideRepository.getRideDays(rideId)
+        val travelDays = rideDays.filter { it.dayType == RideDayType.TRAVEL }
+        val isMultiDay = travelDays.size > 1
+        val mergedStops = mergedStopsForRide(rideRepository, rideId)
         val durationS = ride.totalDurationS
         val avgSpeedKmh = if (durationS > 0) (ride.totalDistanceM / durationS) * 3.6 else 0.0
         val maxSpeedKmh = rideRepository.getMaxSpeedMps(rideId)?.let { it * 3.6 }
-        val title = SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(ride.startTime)
+        val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+        val title = if (isMultiDay && ride.endTime != null) {
+            "${dateFormat.format(ride.startTime)} – ${dateFormat.format(ride.endTime)}"
+        } else {
+            dateFormat.format(ride.startTime)
+        }
 
         val renderStops = mergedStops.mapIndexedNotNull { index, stop ->
             if (index in excludedStopIndices) return@mapIndexedNotNull null
+            val baseName = stopNameOverrides[index]?.takeIf { it.isNotBlank() } ?: stop.placeName
+            // Only a day's own start/end get the day number — a mid-day pause doesn't need one,
+            // since the color gradient and the day's own start/end labels already place it.
+            val isDayBoundary = stop.primaryAction == RideEventAction.START || stop.actions.contains(RideEventAction.END)
+            val displayName = if (isMultiDay && isDayBoundary) dayTaggedLabel(stop.dayIndex, baseName) else baseName
             RenderStop(
                 action = stop.primaryAction,
                 timestamp = stop.timestamp,
                 lat = stop.lat,
                 lng = stop.lng,
-                displayName = stopNameOverrides[index]?.takeIf { it.isNotBlank() } ?: stop.placeName,
-                backgroundImagePath = stopBackgroundPaths[index]
+                displayName = displayName,
+                backgroundImagePath = stopBackgroundPaths[index],
+                dayIndex = stop.dayIndex
+            )
+        }
+
+        val renderDays = travelDays.map { day ->
+            RenderDay(
+                dayIndex = day.dayIndex,
+                label = dayTaggedLabel(day.dayIndex, dateFormat.format(day.startTime)),
+                points = rideRepository.getRoutePointsForDay(day.id),
+                stops = renderStops.filter { it.dayIndex == day.dayIndex }
             )
         }
 
@@ -57,8 +78,11 @@ class RideRenderDataAssembler(private val rideRepository: RideRepository) {
             totalDurationS = durationS,
             avgSpeedKmh = avgSpeedKmh,
             maxSpeedKmh = maxSpeedKmh,
-            days = listOf(RenderDay(dayIndex = 0, label = title, points = points, stops = renderStops)),
+            days = renderDays,
             coverImagePath = coverImagePath
         )
     }
+
+    private fun dayTaggedLabel(dayIndex: Int, base: String?): String =
+        if (base.isNullOrBlank()) "Day ${dayIndex + 1}" else "Day ${dayIndex + 1} · $base"
 }
