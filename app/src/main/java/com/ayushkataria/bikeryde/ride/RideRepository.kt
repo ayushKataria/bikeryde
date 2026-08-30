@@ -296,6 +296,54 @@ class RideRepository(context: Context) {
         }
     }
 
+    /** Sets or clears (pass null or blank) a ride's user-given display name. */
+    suspend fun renameRide(rideId: Long, title: String?) = withContext(Dispatchers.IO) {
+        dbHelper.writableDatabase.update(
+            "ride",
+            ContentValues().apply { put("title", title?.trim()?.takeIf { it.isNotEmpty() }) },
+            "id = ?",
+            arrayOf(rideId.toString())
+        )
+    }
+
+    /**
+     * Permanently deletes a ride and everything that hangs off it — its days, stops, GPS points,
+     * and render records (plus their output files on disk, best-effort). There's no foreign-key
+     * cascade in this SQLite schema, so each child table is cleared explicitly in one transaction.
+     */
+    suspend fun deleteRide(rideId: Long) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val renderPaths = db.query(
+            "render", arrayOf("file_path"), "ride_id = ?", arrayOf(rideId.toString()), null, null, null
+        ).use { cursor ->
+            val paths = mutableListOf<String>()
+            while (cursor.moveToNext()) {
+                cursor.getString(0)?.let { paths += it }
+            }
+            paths
+        }
+
+        db.beginTransaction()
+        try {
+            db.execSQL(
+                "DELETE FROM gps_point WHERE ride_day_id IN (SELECT id FROM ride_day WHERE ride_id = ?)",
+                arrayOf(rideId)
+            )
+            db.execSQL(
+                "DELETE FROM stop WHERE ride_day_id IN (SELECT id FROM ride_day WHERE ride_id = ?)",
+                arrayOf(rideId)
+            )
+            db.delete("ride_day", "ride_id = ?", arrayOf(rideId.toString()))
+            db.delete("render", "ride_id = ?", arrayOf(rideId.toString()))
+            db.delete("ride", "id = ?", arrayOf(rideId.toString()))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+
+        renderPaths.forEach { path -> runCatching { java.io.File(path).delete() } }
+    }
+
     private fun setStatus(db: SQLiteDatabase, rideId: Long, status: RideStatus) {
         db.update(
             "ride",
@@ -335,7 +383,8 @@ class RideRepository(context: Context) {
         endTime = if (isNull(getColumnIndexOrThrow("end_time"))) null else getLong(getColumnIndexOrThrow("end_time")),
         status = RideStatus.valueOf(getString(getColumnIndexOrThrow("status"))),
         totalDistanceM = getDouble(getColumnIndexOrThrow("total_distance_m")),
-        totalDurationS = getLong(getColumnIndexOrThrow("total_duration_s"))
+        totalDurationS = getLong(getColumnIndexOrThrow("total_duration_s")),
+        title = getString(getColumnIndexOrThrow("title"))
     )
 
     private fun Cursor.toRideDay(): RideDay = RideDay(

@@ -4,6 +4,9 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -13,6 +16,7 @@ import com.ayushkataria.bikeryde.ride.Ride
 import com.ayushkataria.bikeryde.ride.RideRepository
 import com.ayushkataria.bikeryde.ui.ride.RideDetailFragment
 import com.ayushkataria.bikeryde.ui.ride.RideStatsFormat
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -48,9 +52,11 @@ class RideHistoryFragment : Fragment(R.layout.fragment_ride_history) {
         }
     }
 
+    private fun displayTitle(ride: Ride): String = ride.title?.takeIf { it.isNotBlank() } ?: dateFormat.format(ride.startTime)
+
     private fun buildRow(ride: Ride): View {
-        val row = LayoutInflater.from(requireContext()).inflate(R.layout.item_home_card, listContainer, false)
-        row.findViewById<TextView>(R.id.cardTitle).text = dateFormat.format(ride.startTime)
+        val row = LayoutInflater.from(requireContext()).inflate(R.layout.item_ride_history_row, listContainer, false)
+        row.findViewById<TextView>(R.id.cardTitle).text = displayTitle(ride)
         row.findViewById<TextView>(R.id.cardSubtitle).text = getString(
             R.string.ride_history_row_subtitle_format,
             RideStatsFormat.distance(ride.totalDistanceM),
@@ -62,6 +68,70 @@ class RideHistoryFragment : Fragment(R.layout.fragment_ride_history) {
                 RideDetailFragment.args(ride.id)
             )
         }
+        row.findViewById<View>(R.id.rowMenuButton).setOnClickListener { anchor -> showRowMenu(anchor, ride) }
         return row
+    }
+
+    private fun showRowMenu(anchor: View, ride: Ride) {
+        PopupMenu(requireContext(), anchor).apply {
+            menu.add(0, MENU_RENAME, 0, R.string.ride_history_action_rename)
+            menu.add(0, MENU_DELETE, 1, R.string.ride_history_action_delete)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    MENU_RENAME -> {
+                        showRenameDialog(ride)
+                        true
+                    }
+                    MENU_DELETE -> {
+                        showDeleteConfirm(ride)
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }.show()
+    }
+
+    private fun showRenameDialog(ride: Ride) {
+        val padding = (16 * resources.displayMetrics.density).toInt()
+        val input = EditText(requireContext()).apply {
+            setText(ride.title)
+            hint = dateFormat.format(ride.startTime)
+            setSelection(text.length)
+        }
+        val container = FrameLayout(requireContext()).apply {
+            setPadding(padding, padding / 2, padding, 0)
+            addView(input)
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.ride_rename_dialog_title)
+            .setView(container)
+            .setPositiveButton(R.string.action_save) { _, _ ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    repository.renameRide(ride.id, input.text.toString())
+                    loadRides()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showDeleteConfirm(ride: Ride) {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.ride_delete_confirm_title)
+            .setMessage(R.string.ride_delete_confirm_message)
+            .setPositiveButton(R.string.action_delete) { _, _ ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    repository.deleteRide(ride.id)
+                    loadRides()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    companion object {
+        private const val MENU_RENAME = 1
+        private const val MENU_DELETE = 2
     }
 }

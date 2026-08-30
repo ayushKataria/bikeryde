@@ -55,6 +55,15 @@
     <string name="home_card_ride_history_subtitle">Browse past rides and create images or animations for them</string>
     <string name="ride_history_empty">No completed rides yet. Finish a ride to see it here.</string>
     <string name="ride_history_row_subtitle_format">%1$s · %2$s</string>
+    <string name="ride_history_row_menu_description">More options</string>
+    <string name="ride_history_action_rename">Rename</string>
+    <string name="ride_history_action_delete">Delete</string>
+    <string name="ride_rename_dialog_title">Rename ride</string>
+    <string name="ride_rename_hint">Ride name</string>
+    <string name="ride_delete_confirm_title">Delete ride?</string>
+    <string name="ride_delete_confirm_message">This permanently deletes the ride, its route, and any images or videos created from it.</string>
+    <string name="action_save">Save</string>
+    <string name="action_delete">Delete</string>
     <string name="home_settings_content_description">Settings</string>
 
     <!-- Post-ride actions (shown after ending a single or multi-day ride) -->

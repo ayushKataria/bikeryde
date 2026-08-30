@@ -86,8 +86,8 @@ class RideDetailFragment : Fragment(R.layout.fragment_ride_detail) {
             val events = repository.getEvents(rideId).filterNot { it.action == RideEventAction.RESUME }
             val maxSpeedMps = repository.getMaxSpeedMps(rideId)
 
-            view.findViewById<TextView>(R.id.topBarTitle).text =
-                SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(ride.startTime)
+            view.findViewById<TextView>(R.id.topBarTitle).text = ride.title?.takeIf { it.isNotBlank() }
+                ?: SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(ride.startTime)
 
             distanceText.text = RideStatsFormat.distance(ride.totalDistanceM)
             durationText.text = RideStatsFormat.duration(ride.totalDurationS)

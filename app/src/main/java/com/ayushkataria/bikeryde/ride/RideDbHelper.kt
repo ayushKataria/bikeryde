@@ -23,7 +23,8 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
                 end_time INTEGER,
                 status TEXT NOT NULL,
                 total_distance_m REAL NOT NULL DEFAULT 0,
-                total_duration_s INTEGER NOT NULL DEFAULT 0
+                total_duration_s INTEGER NOT NULL DEFAULT 0,
+                title TEXT
             )
             """.trimIndent()
         )
@@ -87,18 +88,14 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS render")
-        db.execSQL("DROP TABLE IF EXISTS gps_point")
-        db.execSQL("DROP TABLE IF EXISTS stop")
-        db.execSQL("DROP TABLE IF EXISTS ride_event")
-        db.execSQL("DROP TABLE IF EXISTS ride_day")
-        db.execSQL("DROP TABLE IF EXISTS ride")
-        onCreate(db)
+        if (oldVersion < 7) {
+            db.execSQL("ALTER TABLE ride ADD COLUMN title TEXT")
+        }
     }
 
     companion object {
         private const val DB_NAME = "bikeryde.db"
-        private const val DB_VERSION = 6
+        private const val DB_VERSION = 7
     }
 }
 

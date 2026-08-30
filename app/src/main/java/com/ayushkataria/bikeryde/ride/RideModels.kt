@@ -22,7 +22,9 @@ data class Ride(
     val endTime: Long?,
     val status: RideStatus,
     val totalDistanceM: Double,
-    val totalDurationS: Long
+    val totalDurationS: Long,
+    /** User-given name, set via the rename action on the ride history screen — null falls back to the ride's date. */
+    val title: String? = null
 )
 
 /** A single logged GPS fix for the live route render — lighter-weight than the full [GpsPoint] model. */
