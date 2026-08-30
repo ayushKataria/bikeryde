@@ -2,9 +2,12 @@ package com.ayushkataria.bikeryde.media
 
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.location.Location
 import com.ayushkataria.bikeryde.ride.RideEventAction
@@ -42,6 +45,30 @@ object RouteFrameDrawer {
     private val pauseResumeColor = Color.parseColor("#8A5A00")
     private val endColor = Color.parseColor("#BA1A1A")
 
+    /** The route line is colored by elapsed progress (early = [routeGradientStartColor], later =
+     * [routeGradientEndColor]) rather than one flat color, so an out-and-back ride's return leg
+     * reads as a visibly different pass over the same roads instead of invisibly retracing an
+     * identical line. */
+    private val routeGradientStartColor = routeColor
+    private val routeGradientEndColor = Color.parseColor("#2B62E8")
+
+    /** How many colored chunks the route line is split into for the gradient — coarse enough to
+     * keep per-frame draw calls cheap, fine enough that the color change reads as a smooth fade. */
+    private const val GRADIENT_SEGMENT_COUNT = 40
+
+    /** How many trailing points get the bright "current position" comet trail. */
+    private const val TRAIL_POINT_COUNT = 14
+
+    private fun colorForFraction(fraction: Float): Int {
+        val t = fraction.coerceIn(0f, 1f)
+        val r = lerpChannel(Color.red(routeGradientStartColor), Color.red(routeGradientEndColor), t)
+        val g = lerpChannel(Color.green(routeGradientStartColor), Color.green(routeGradientEndColor), t)
+        val b = lerpChannel(Color.blue(routeGradientStartColor), Color.blue(routeGradientEndColor), t)
+        return Color.rgb(r, g, b)
+    }
+
+    private fun lerpChannel(from: Int, to: Int, t: Float): Int = (from + (to - from) * t).toInt().coerceIn(0, 255)
+
     fun prepare(width: Int, height: Int, data: RideRenderData): PreparedRender =
         PreparedRender(width, height, data)
 
@@ -52,6 +79,11 @@ object RouteFrameDrawer {
         (stopIndex.toFloat() / (totalStops - 1).coerceAtLeast(1)) * (totalPoints - 1)
 
     private class StopEntry(val revealIndex: Float, val point: PointF, val color: Int, val label: String?)
+
+    /** A pre-built, pre-colored chunk of the route line — [path] spans point indices
+     * [startIndex]..[endIndex] inclusive and is reused every frame once fully revealed; only the
+     * one chunk currently being drawn mid-reveal needs a fresh, shorter path each frame. */
+    private class RouteSegment(val startIndex: Int, val endIndex: Int, val color: Int, val path: Path)
 
     class PreparedRender internal constructor(
         private val width: Int,
@@ -92,7 +124,29 @@ object RouteFrameDrawer {
             prefix
         }
 
+        private val routeSegments: List<RouteSegment> = if (hasRoute) buildRouteSegments() else emptyList()
+
+        private fun buildRouteSegments(): List<RouteSegment> {
+            val n = allPoints.size
+            val chunkSize = ceil((n - 1).toDouble() / min(GRADIENT_SEGMENT_COUNT, n - 1).coerceAtLeast(1)).toInt().coerceAtLeast(1)
+            val segments = mutableListOf<RouteSegment>()
+            var start = 0
+            while (start < n - 1) {
+                val end = min(start + chunkSize, n - 1)
+                val midFraction = (start + end) / 2f / (n - 1)
+                segments += RouteSegment(
+                    startIndex = start,
+                    endIndex = end,
+                    color = colorForFraction(midFraction),
+                    path = RouteProjection.smoothedPath(projectedPoints.subList(start, end + 1))
+                )
+                start = end
+            }
+            return segments
+        }
+
         private val markerRadius = routeBounds.width() * 0.018f
+        private val currentPositionRadius = routeBounds.width() * 0.024f
         private val stopEntries: List<StopEntry> = if (hasRoute) {
             val stops = data.allStops
             val vp = viewport!!
@@ -156,6 +210,20 @@ object RouteFrameDrawer {
             strokeWidth = routeBounds.width() * 0.006f
             color = Color.WHITE
         }
+        private val trailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            strokeWidth = routeBounds.width() * 0.017f
+        }
+        private val currentPositionFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.WHITE
+        }
+        private val currentPositionRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = routeBounds.width() * 0.009f
+        }
         private val stopLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = darkTextColor
             textSize = routeBounds.width() * 0.028f
@@ -198,9 +266,58 @@ object RouteFrameDrawer {
             }
 
             val visibleCount = min(allPoints.size, ceil(progress * allPoints.size).toInt().coerceAtLeast(2))
-            canvas.drawPath(RouteProjection.smoothedPath(projectedPoints.subList(0, visibleCount)), routePaint)
+            drawRoute(canvas, visibleCount)
             drawStops(canvas, visibleCount)
+            drawCurrentPosition(canvas, visibleCount)
             drawStats(canvas, visibleFraction(allPoints.size, visibleCount))
+        }
+
+        /** Draws every route chunk revealed so far — precomputed chunks are reused as-is; the one
+         * chunk currently mid-reveal is redrawn each frame with just its visible prefix. */
+        private fun drawRoute(canvas: Canvas, visibleCount: Int) {
+            val lastRevealedIndex = visibleCount - 1
+            for (segment in routeSegments) {
+                if (segment.startIndex > lastRevealedIndex) break
+                routePaint.color = segment.color
+                if (segment.endIndex <= lastRevealedIndex) {
+                    canvas.drawPath(segment.path, routePaint)
+                } else if (lastRevealedIndex > segment.startIndex) {
+                    canvas.drawPath(
+                        RouteProjection.smoothedPath(projectedPoints.subList(segment.startIndex, lastRevealedIndex + 1)),
+                        routePaint
+                    )
+                }
+            }
+        }
+
+        /** A bright "you are here" marker with a short fading comet trail at the current animation
+         * playhead — so a leg of the route that retraces an earlier one (an out-and-back ride) still
+         * visibly shows motion instead of the line just silently overlapping itself. Hidden once the
+         * route finishes drawing (the end-of-video hold), where it would only duplicate the END stop
+         * marker already at that same point. */
+        private fun drawCurrentPosition(canvas: Canvas, visibleCount: Int) {
+            if (!hasRoute || visibleCount < 2 || visibleCount >= allPoints.size) return
+            val headIndex = visibleCount - 1
+            val headFraction = headIndex.toFloat() / (allPoints.size - 1)
+            val headColor = colorForFraction(headFraction)
+            val head = projectedPoints[headIndex]
+
+            val trailStart = (headIndex - TRAIL_POINT_COUNT).coerceAtLeast(0)
+            if (trailStart < headIndex) {
+                val trailPoints = projectedPoints.subList(trailStart, headIndex + 1)
+                val tail = trailPoints.first()
+                trailPaint.shader = LinearGradient(
+                    tail.x, tail.y, head.x, head.y,
+                    Color.TRANSPARENT, headColor,
+                    Shader.TileMode.CLAMP
+                )
+                canvas.drawPath(RouteProjection.smoothedPath(trailPoints), trailPaint)
+                trailPaint.shader = null
+            }
+
+            currentPositionRingPaint.color = headColor
+            canvas.drawCircle(head.x, head.y, currentPositionRadius, currentPositionFillPaint)
+            canvas.drawCircle(head.x, head.y, currentPositionRadius, currentPositionRingPaint)
         }
 
         private fun drawStops(canvas: Canvas, visibleCount: Int) {

@@ -17,7 +17,13 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.nav_host_fragment)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            // Edge-to-edge draws behind the keyboard too, so the OS never shrinks this view for us
+            // the way plain windowSoftInputMode="adjustResize" would in a non-edge-to-edge app —
+            // without folding the IME inset in here ourselves, an on-screen text field near the
+            // bottom of a scrolling screen (e.g. a stop's name field on the render customize
+            // screen) stays covered by the keyboard instead of the ScrollView resizing to reveal it.
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, maxOf(systemBars.bottom, ime.bottom))
             insets
         }
         handleOpenRenderIntent(intent)
