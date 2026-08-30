@@ -22,7 +22,7 @@ sealed class RenderNavigationTarget {
 /** Owns all reads/writes of [Render] rows — the queued/completed static-image and video exports for a ride. */
 class RenderRepository(context: Context) {
 
-    private val dbHelper = RideDbHelper(context.applicationContext)
+    private val dbHelper = RideDbHelper.getInstance(context)
 
     suspend fun insertQueued(rideId: Long, type: RenderType, workId: String? = null): Long =
         withContext(Dispatchers.IO) {

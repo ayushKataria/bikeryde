@@ -10,8 +10,15 @@ import android.database.sqlite.SQLiteOpenHelper
  * Ride -> RideDay -> {Stop, GpsPoint} shape from the design doc's data model. Kept as plain SQLite
  * rather than Room so the persistence layer has no extra build-toolchain dependency (annotation
  * processing) beyond what's already wired into this project.
+ *
+ * Obtain instances via [getInstance], never the constructor directly — [SQLiteOpenHelper] opens
+ * its own connection pool per instance, and every repository ([com.ayushkataria.bikeryde.ride.RideRepository],
+ * [com.ayushkataria.bikeryde.media.RenderRepository], [com.ayushkataria.bikeryde.fuel.FuelRepository])
+ * is itself freshly constructed on almost every screen/service/worker. Without a shared singleton,
+ * each of those created (and never closed) its own helper/connection pool, which Android's
+ * finalizer eventually flags as a leaked `SQLiteConnectionPool`.
  */
-class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
+class RideDbHelper private constructor(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -113,6 +120,15 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
                 notes TEXT
             )
         """
+
+        @Volatile
+        private var instance: RideDbHelper? = null
+
+        /** The one shared instance for the whole process — safe to call from any thread. */
+        fun getInstance(context: Context): RideDbHelper =
+            instance ?: synchronized(this) {
+                instance ?: RideDbHelper(context.applicationContext).also { instance = it }
+            }
     }
 }
 

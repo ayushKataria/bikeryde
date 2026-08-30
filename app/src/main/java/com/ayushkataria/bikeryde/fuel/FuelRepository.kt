@@ -13,7 +13,7 @@ import kotlinx.coroutines.withContext
  * rather than opening a second one, same as [com.ayushkataria.bikeryde.media.RenderRepository]. */
 class FuelRepository(context: Context) {
 
-    private val dbHelper = RideDbHelper(context.applicationContext)
+    private val dbHelper = RideDbHelper.getInstance(context)
 
     /**
      * Records a fill-up, deriving [FuelLog.pricePerLiter] and [FuelLog.mileageSinceLastKm] from
