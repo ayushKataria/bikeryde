@@ -45,11 +45,27 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
             if (path.isNullOrBlank()) null else i to path
         }?.toMap() ?: emptyMap()
         val excludedStopIndices = inputData.getIntArray(KEY_EXCLUDED_STOPS)?.toSet() ?: emptySet()
+        val dayBackgrounds = inputData.getStringArray(KEY_DAY_BACKGROUNDS)
+        val dayCaptions = inputData.getStringArray(KEY_DAY_CAPTIONS)
+        val dayBackgroundPaths = dayBackgrounds?.mapIndexedNotNull { i, path ->
+            if (path.isNullOrBlank()) null else i to path
+        }?.toMap() ?: emptyMap()
+        val dayCaptionOverrides = dayCaptions?.mapIndexedNotNull { i, text ->
+            if (text.isNullOrBlank()) null else i to text
+        }?.toMap() ?: emptyMap()
+        val dayLabelsEnabled = inputData.getBoolean(KEY_DAY_LABELS_ENABLED, false)
 
         val rideRepository = RideRepository(applicationContext)
         val renderRepository = RenderRepository(applicationContext)
-        val data = RideRenderDataAssembler(rideRepository)
-            .assemble(rideId, stopNameOverrides, stopBackgroundPaths, excludedStopIndices)
+        val data = RideRenderDataAssembler(rideRepository).assemble(
+            rideId = rideId,
+            stopNameOverrides = stopNameOverrides,
+            stopBackgroundPaths = stopBackgroundPaths,
+            excludedStopIndices = excludedStopIndices,
+            dayBackgroundPaths = dayBackgroundPaths,
+            dayCaptionOverrides = dayCaptionOverrides,
+            dayLabelsEnabled = dayLabelsEnabled
+        )
         if (data == null || data.allPoints.size < 2) return Result.failure()
 
         val recommendedDurationS = VideoDurationRecommender.recommend(data.allStops.size)
@@ -64,7 +80,9 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
         val renderId = renderRepository.insertQueued(rideId, RenderType.VIDEO, workId = id.toString())
         renderRepository.markProcessing(renderId)
 
-        val backgroundPaths = listOfNotNull(data.coverImagePath) + data.allStops.mapNotNull { it.backgroundImagePath }
+        val backgroundPaths = listOfNotNull(data.coverImagePath) +
+            data.allStops.mapNotNull { it.backgroundImagePath } +
+            data.days.mapNotNull { it.backgroundImagePath }
         BackgroundImageCache.preload(backgroundPaths, WIDTH, HEIGHT)
 
         return try {
@@ -120,11 +138,13 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
         // The animation itself sweeps progress 0..1 across animationFrameCount frames (the
         // duration the rider chose/customized); lingerFrameCount then holds on the completed
         // route — full path, all stops, final stats — at the ride's last stop, so the video
-        // doesn't cut away the instant it finishes drawing. Added on top, not carved out of the
-        // chosen duration.
+        // doesn't cut away the instant it finishes drawing. A rest day gets its own fixed-length
+        // hold spliced in at the right point too (see VideoTimeline) — both are added on top of the
+        // chosen animation duration, not carved out of it.
         val animationFrameCount = fps * durationS
         val lingerFrameCount = fps * LINGER_SECONDS
-        val frameCount = animationFrameCount + lingerFrameCount
+        val timeline = VideoTimeline.build(data, fps, animationFrameCount, lingerFrameCount)
+        val frameCount = timeline.size
         // All the per-render setup (point projection, distance prefix sums, Paint objects) happens
         // once here, not on every frame — see RouteFrameDrawer's kdoc for why that matters for both
         // render time and playback smoothness.
@@ -186,15 +206,11 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
             // *video's* timing deterministically afterward, so there's nothing to gain from trying
             // to hit real time during capture — only render time to lose.
             var lastReportedPercent = -1
-            for (frame in 0 until frameCount) {
-                val progress = if (frame < animationFrameCount) {
-                    frame / (animationFrameCount - 1).toFloat()
-                } else {
-                    1f
-                }
+            for (frame in timeline.indices) {
+                val frameSpec = timeline[frame]
                 val canvas = inputSurface.lockCanvas(null)
                 try {
-                    preparedRender.draw(canvas, progress)
+                    preparedRender.draw(canvas, frameSpec.progress, frameSpec.dayIndex, frameSpec.daySegmentProgress)
                 } finally {
                     inputSurface.unlockCanvasAndPost(canvas)
                 }
@@ -309,6 +325,13 @@ class VideoRenderWorker(appContext: Context, params: WorkerParameters) : Corouti
         const val KEY_EXCLUDED_STOPS = "excludedStops"
         /** Animation length in seconds — defaults to [VideoDurationRecommender.recommend] if omitted. */
         const val KEY_DURATION_SECONDS = "durationSeconds"
+        /** String array keyed by [com.ayushkataria.bikeryde.ride.RideDay.dayIndex] — one background
+         * photo path per day, multi-day video only. */
+        const val KEY_DAY_BACKGROUNDS = "dayBackgrounds"
+        /** String array, same keying — one rider-edited caption per day. */
+        const val KEY_DAY_CAPTIONS = "dayCaptions"
+        /** The customize screen's "Add day labels" checkbox. */
+        const val KEY_DAY_LABELS_ENABLED = "dayLabelsEnabled"
 
         const val WIDTH = 1080
         const val HEIGHT = 1920

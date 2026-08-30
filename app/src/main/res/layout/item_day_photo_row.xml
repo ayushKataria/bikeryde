@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="top"
+    android:orientation="horizontal">
+
+    <ImageView
+        android:id="@+id/rowThumbnail"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginTop="4dp"
+        android:background="@drawable/bg_photo_slot"
+        android:contentDescription="@string/render_edit_add_stop_photo"
+        android:padding="16dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/ic_add_photo"
+        app:tint="?attr/colorOnSurfaceVariant"
+        tools:ignore="ImageContrastCheck" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/rowDayTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="14sp"
+            tools:text="Day 2 · Rest day · Aug 21, 2026" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/rowCaptionLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:hint="@string/render_edit_day_caption_hint"
+            android:visibility="gone"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            tools:visibility="visible">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/rowCaptionInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textCapSentences" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+    </LinearLayout>
+
+</LinearLayout>

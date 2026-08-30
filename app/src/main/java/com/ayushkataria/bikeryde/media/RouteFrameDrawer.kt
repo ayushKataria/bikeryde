@@ -59,6 +59,11 @@ object RouteFrameDrawer {
     /** How many trailing points get the bright "current position" comet trail. */
     private const val TRAIL_POINT_COUNT = 14
 
+    /** A multi-day day's photo/caption reaches full opacity this far into its own segment's
+     * [RenderFrame.daySegmentProgress] — short enough that even a 3s rest-day hold gets a visible
+     * fade rather than one slower than the hold itself. */
+    private const val DAY_CROSSFADE_FRACTION = 0.15f
+
     private fun colorForFraction(fraction: Float): Int {
         val t = fraction.coerceIn(0f, 1f)
         val r = lerpChannel(Color.red(routeGradientStartColor), Color.red(routeGradientEndColor), t)
@@ -90,7 +95,9 @@ object RouteFrameDrawer {
         private val height: Int,
         private val data: RideRenderData
     ) {
-        private val usesPhoto = data.coverImagePath != null || data.allStops.any { it.backgroundImagePath != null }
+        private val usesPhoto = data.coverImagePath != null ||
+            data.allStops.any { it.backgroundImagePath != null } ||
+            data.days.any { it.backgroundImagePath != null }
         private val textColor = if (usesPhoto) lightTextColor else darkTextColor
         private val labelColor = if (usesPhoto) lightLabelColor else darkLabelColor
 
@@ -167,8 +174,8 @@ object RouteFrameDrawer {
             }
         } else emptyList()
 
-        /** (revealIndex, photo path) for stops with a background photo — video crossfade only. */
-        private val imagedStops: List<Pair<Float, String>> = if (hasRoute && data.coverImagePath == null) {
+        /** (revealIndex, photo path) for stops with a background photo — single-day video crossfade. */
+        private val imagedStops: List<Pair<Float, String>> = if (hasRoute && data.coverImagePath == null && !data.isMultiDay) {
             val stops = data.allStops
             stops.mapIndexedNotNull { index, stop ->
                 stop.backgroundImagePath?.let { path -> stopRevealPointIndex(index, stops.size, allPoints.size) to path }
@@ -245,9 +252,27 @@ object RouteFrameDrawer {
         private val scrimPaint = Paint().apply { color = scrimColor }
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        fun draw(canvas: Canvas, progress: Float) {
+        // The "Instagram style" per-day caption, bottom-center over the route graphics.
+        private val captionBaseTextSize = routeBounds.width() * 0.042f
+        private val captionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = captionBaseTextSize
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        private val captionBarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#99000000") }
+
+        /**
+         * @param dayIndex which day's segment this frame belongs to (see [VideoTimeline]) — a
+         *   multi-day video's per-day photo/caption come from this, not from [progress] (which, in
+         *   point-index space, has no width at all for a rest day).
+         * @param daySegmentProgress 0..1 through that day's own segment — a travel day's reveal
+         *   fraction, or a rest day's hold fraction — used to fade its photo/caption in smoothly
+         *   rather than cutting to it.
+         */
+        fun draw(canvas: Canvas, progress: Float, dayIndex: Int = 0, daySegmentProgress: Float = 1f) {
             canvas.drawColor(if (usesPhoto) Color.BLACK else backgroundColor)
-            if (usesPhoto) drawPhotoBackground(canvas, progress)
+            if (usesPhoto) drawPhotoBackground(canvas, progress, dayIndex, daySegmentProgress)
 
             canvas.drawText(data.title, margin, headerBottom * 0.65f, titlePaint)
             canvas.drawText("BikeRyde", width - margin, headerBottom * 0.65f, wordmarkPaint)
@@ -269,7 +294,42 @@ object RouteFrameDrawer {
             drawRoute(canvas, visibleCount)
             drawStops(canvas, visibleCount)
             drawCurrentPosition(canvas, visibleCount)
+            drawCaption(canvas, data.days.firstOrNull { it.dayIndex == dayIndex }?.caption, dayFadeAlpha(daySegmentProgress))
             drawStats(canvas, visibleFraction(allPoints.size, visibleCount))
+        }
+
+        /** How far into a day's own segment its photo/caption has faded in — full opacity once
+         * [daySegmentProgress] passes [DAY_CROSSFADE_FRACTION], not the whole segment, so a short
+         * rest-day hold still gets a visible fade rather than a fade slower than the hold itself. */
+        private fun dayFadeAlpha(daySegmentProgress: Float): Float =
+            (daySegmentProgress / DAY_CROSSFADE_FRACTION).coerceIn(0f, 1f)
+
+        /** The "Instagram style" bottom-center caption, layered above the route/photo graphics but
+         * below the stats footer — a dark bar behind bold white text, shrunk to fit if it's long,
+         * fading in at [alpha] alongside its day's photo. */
+        private fun drawCaption(canvas: Canvas, caption: String?, alpha: Float) {
+            if (caption.isNullOrBlank() || alpha <= 0f) return
+            val maxWidth = routeBounds.width() * 0.84f
+            captionPaint.textSize = captionBaseTextSize
+            while (captionPaint.measureText(caption) > maxWidth && captionPaint.textSize > captionBaseTextSize * 0.55f) {
+                captionPaint.textSize -= 2f
+            }
+            val barHeight = captionPaint.textSize * 2.3f
+            val barBottom = routeBounds.bottom - routeBounds.height() * 0.05f
+            val barTop = barBottom - barHeight
+            captionBarPaint.alpha = (0x99 * alpha).toInt()
+            canvas.drawRoundRect(
+                routeBounds.left + routeBounds.width() * 0.06f,
+                barTop,
+                routeBounds.right - routeBounds.width() * 0.06f,
+                barBottom,
+                barHeight * 0.3f,
+                barHeight * 0.3f,
+                captionBarPaint
+            )
+            captionPaint.alpha = (255 * alpha).toInt()
+            val textY = barBottom - barHeight / 2f - (captionPaint.ascent() + captionPaint.descent()) / 2f
+            canvas.drawText(caption, routeBounds.centerX(), textY, captionPaint)
         }
 
         /** Draws every route chunk revealed so far — precomputed chunks are reused as-is; the one
@@ -346,10 +406,12 @@ object RouteFrameDrawer {
 
         /**
          * Draws the active background photo: the single [RideRenderData.coverImagePath] for a
-         * static image, or — for a video — crossfades between each stop's photo as the route
-         * animates past it, with a dark scrim under both so the route/stats stay legible.
+         * static image; for a single-day video, a crossfade between each stop's photo as the route
+         * animates past it; for a multi-day video, a crossfade between each day's photo (travel or
+         * rest alike) as its segment begins — see [drawMultiDayPhoto]. A dark scrim under all of
+         * these keeps the route/stats/caption legible.
          */
-        private fun drawPhotoBackground(canvas: Canvas, progress: Float) {
+        private fun drawPhotoBackground(canvas: Canvas, progress: Float, dayIndex: Int, daySegmentProgress: Float) {
             val coverPath = data.coverImagePath
             if (coverPath != null) {
                 BackgroundImageCache.get(coverPath)?.let { bitmap ->
@@ -357,6 +419,11 @@ object RouteFrameDrawer {
                     canvas.drawBitmap(bitmap, 0f, 0f, bitmapPaint)
                 }
                 canvas.drawRect(fullCanvasRect, scrimPaint)
+                return
+            }
+
+            if (data.isMultiDay) {
+                drawMultiDayPhoto(canvas, dayIndex, daySegmentProgress)
                 return
             }
 
@@ -382,6 +449,35 @@ object RouteFrameDrawer {
                         bitmapPaint.alpha = (alpha * 255).toInt()
                         canvas.drawBitmap(bitmap, 0f, 0f, bitmapPaint)
                     }
+                }
+            }
+            canvas.drawRect(fullCanvasRect, scrimPaint)
+        }
+
+        /** Every day (travel or rest) is a segment with its own photo and its own 0..1
+         * [daySegmentProgress] — the previous day-with-a-photo stays at full opacity underneath
+         * while the current day's photo fades in over [DAY_CROSSFADE_FRACTION] of its segment, so a
+         * rest day gets exactly the same smooth transition a travel day does, instead of the hard
+         * cut a point-index-based crossfade gives it (it has no points, so no width in that space). */
+        private fun drawMultiDayPhoto(canvas: Canvas, dayIndex: Int, daySegmentProgress: Float) {
+            val currentPhoto = data.days.firstOrNull { it.dayIndex == dayIndex }?.backgroundImagePath
+            val previousPhoto = data.days
+                .filter { it.dayIndex < dayIndex && it.backgroundImagePath != null }
+                .maxByOrNull { it.dayIndex }
+                ?.backgroundImagePath
+            if (currentPhoto == null && previousPhoto == null) return
+
+            previousPhoto?.let { path ->
+                BackgroundImageCache.get(path)?.let { bitmap ->
+                    bitmapPaint.alpha = 255
+                    canvas.drawBitmap(bitmap, 0f, 0f, bitmapPaint)
+                }
+            }
+            val fadeAlpha = dayFadeAlpha(daySegmentProgress)
+            if (currentPhoto != null && fadeAlpha > 0f) {
+                BackgroundImageCache.get(currentPhoto)?.let { bitmap ->
+                    bitmapPaint.alpha = (fadeAlpha * 255).toInt()
+                    canvas.drawBitmap(bitmap, 0f, 0f, bitmapPaint)
                 }
             }
             canvas.drawRect(fullCanvasRect, scrimPaint)

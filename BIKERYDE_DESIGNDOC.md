@@ -19,7 +19,8 @@ no backend, no hosting cost. Native Android app built in Kotlin.
 
 **Non-goals (v1)**
 - No multi-user backend, no shared/default API keys, no app-level login/SSO
-- No custom turn-by-turn navigation — hands off to Google Maps for actual navigation
+- No in-app navigation of any kind — no route preview map, no turn-by-turn, no handoff to another
+  navigation app; riders use whatever navigation app they already prefer, entirely outside BikeRyde
 - No iOS or web build — Android only
 - No social feed / follower features — exports go to Instagram manually
 
@@ -51,15 +52,11 @@ no backend, no hosting cost. Native Android app built in Kotlin.
 │  └───────────────────┬─────────────────────┘              │
 └──────────────────────┼────────────────────────────────────┘
                        │
-     ┌─────────────────┼──────────────────┬──────────────────┐
-     v                 v                  v                  v
-Google Drive API   Weather/Places API   Maps SDK for      Cloud AI API
-(optional sync,     (BYO key or free    Android (preview  (BYO key,
- user's account)     tier)               only, BYO key)    optional)
-                                          │
-                                          v
-                                   Intent → Google Maps app
-                                   (actual turn-by-turn nav)
+     ┌─────────────────┼──────────────────┐
+     v                 v                  v
+Google Drive API   Weather/Places API   Cloud AI API
+(optional sync,     (BYO key or free    (BYO key,
+ user's account)     tier)               optional)
 ```
 
 No backend server anywhere — every external call is made directly from the device using the
@@ -83,8 +80,6 @@ user's own credentials, and native Android APIs are used directly with no cross-
 | Cloud AI (optional) | Retrofit/OkHttp client to Claude API (or user's chosen provider) | BYO key, toggle in settings |
 | Weather | Open-Meteo (free, no key) or BYO key provider | Retrofit client |
 | Places / geocoding | OpenStreetMap Nominatim/Overpass (free) or BYO Google Places key | |
-| Maps (preview) | Google Maps SDK for Android, BYO key | Preview/planning only, not navigation |
-| Navigation handoff | Explicit `Intent` to Google Maps app | No Navigation SDK cost |
 | Cloud sync (optional) | Google Drive REST API via Google Identity Services | File-scope OAuth, not app login |
 | Notifications | `NotificationCompat`, `WorkManager` for background render jobs | |
 | Networking | Retrofit + OkHttp | |
@@ -147,7 +142,7 @@ suggestions (JSON: food/sightseeing/lodging), generatedBy (LOCAL | CLOUD)
 
 **AppSettings** (DataStore, not Room, for key-value settings)
 ```
-apiKeys (weather, places, maps, aiCloud) — stored via EncryptedSharedPreferences,
+apiKeys (weather, places, aiCloud) — stored via EncryptedSharedPreferences,
 aiMode (LOCAL | CLOUD), driveSyncEnabled (Boolean), units (KM | MI)
 ```
 
@@ -194,21 +189,14 @@ aiMode (LOCAL | CLOUD), driveSyncEnabled (Boolean), units (KM | MI)
 - **Local mode (default):** MediaPipe LLM Inference API running Gemma on-device, no network call for the AI step itself (weather/places calls still happen over the network)
 - **Cloud mode (toggle):** sends the same structured payload to the user's configured cloud AI provider for a stronger answer
 
-### 5.6 Navigation
-- App's own map (Google Maps SDK for Android) shows the **planned route** only — preview, not turn-by-turn
-- User taps **Start navigation** → dialog: "Open in Google Maps?"
-  - **Yes:** `Intent` launches the Google Maps app for actual turn-by-turn guidance
-  - **No:** stays in-app, tracking starts without external navigation
-- Either way, `ForegroundService` tracking starts in the background with a persistent "Trip in progress" notification
-
-### 5.7 Onboarding & key management
+### 5.6 Onboarding & key management
 - First open: **Import from Google Drive** or **Start fresh**
   - Import: Google OAuth (file-scope only via Google Identity Services, not an app login) — pulls a previous export/sync file
-  - Start fresh: settings screen walkthrough where the user optionally adds their own keys (weather, places, maps, cloud AI), each field linking to "how to get this key" instructions
-- No default or shared keys anywhere. Missing a key disables only that specific feature (e.g. no Maps key → route preview falls back to a simpler map or is disabled with a clear message)
+  - Start fresh: settings screen walkthrough where the user optionally adds their own keys (weather, places, cloud AI), each field linking to "how to get this key" instructions
+- No default or shared keys anywhere. Missing a key disables only that specific feature
 - Keys stored via `EncryptedSharedPreferences`, never logged, never included in crash reports
 
-### 5.8 Sync (optional)
+### 5.7 Sync (optional)
 - Google Drive, user's own account, app-scoped file access (Drive `appDataFolder` or a user-visible dedicated folder)
 - Manual "Sync now" button plus optional sync-on-app-open
 - Structured data (rides, fuel logs, plans) synced as a JSON export from Room; photos/videos optionally included if the user allows larger uploads
@@ -239,8 +227,7 @@ aiMode (LOCAL | CLOUD), driveSyncEnabled (Boolean), units (KM | MI)
 2. **Multi-day tracking + video export** — start/pause/end day actions, trip stitching, WorkManager render job + notifications, stop-name labeling
 3. **Photo backgrounds + animation polish** — background layering in render engine, 1080p60/30 tuning across device tiers
 4. **AI ride planning** — weather/places integration, local Gemma pipeline via MediaPipe, cloud toggle
-5. **Navigation handoff** — Google Maps intent + background tracking continuation
-6. **Google Drive sync** — import/export flow, first-run onboarding
+5. **Google Drive sync** — import/export flow, first-run onboarding
 
 ---
 
@@ -261,5 +248,4 @@ Each entry below becomes an inline help card next to its key field in-app.
 
 - **Weather (Open-Meteo):** no key required for the free tier — nothing to set up
 - **Places / geocoding (OpenStreetMap):** no key required; optional Google Places key for richer POI data (Google Cloud Console → enable Places API → create API key)
-- **Maps (Google Maps SDK for Android):** Google Cloud Console → enable Maps SDK for Android → create API key → restrict to your app's package name + SHA-1 fingerprint
 - **Cloud AI (Claude API, optional):** console.anthropic.com → API Keys → Create Key

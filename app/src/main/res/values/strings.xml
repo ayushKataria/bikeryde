@@ -132,6 +132,12 @@
     <string name="render_edit_stop_name_hint">Stop name</string>
     <string name="render_edit_stop_include">Include</string>
     <string name="render_edit_add_stop_photo">Add photo</string>
+    <string name="render_edit_days_section">Day Photos &amp; Labels</string>
+    <string name="render_edit_days_hint">Add one photo per day — it fades in as that day\'s route animates, and holds on a rest day for a few seconds.</string>
+    <string name="render_edit_day_labels_toggle">Add day labels</string>
+    <string name="render_edit_day_caption_hint">Caption</string>
+    <string name="render_edit_day_rest_format">Day %1$d · Rest day · %2$s</string>
+    <string name="render_edit_day_travel_format">Day %1$d · %2$s</string>
 
     <!-- Coming soon placeholder -->
     <string name="coming_soon_icon">🚧</string>
