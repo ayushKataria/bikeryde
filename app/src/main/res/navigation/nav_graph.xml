@@ -36,7 +36,27 @@
         <action
             android:id="@+id/action_home_to_settings"
             app:destination="@id/settingsFragment" />
+        <action
+            android:id="@+id/action_home_to_fuelLog"
+            app:destination="@id/fuelLogFragment" />
     </fragment>
+
+    <fragment
+        android:id="@+id/fuelLogFragment"
+        android:name="com.ayushkataria.bikeryde.ui.fuel.FuelLogFragment"
+        android:label="Fuel Log"
+        tools:layout="@layout/fragment_fuel_log">
+
+        <action
+            android:id="@+id/action_fuelLog_to_addFuelLog"
+            app:destination="@id/addFuelLogFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/addFuelLogFragment"
+        android:name="com.ayushkataria.bikeryde.ui.fuel.AddFuelLogFragment"
+        android:label="Add Fill-Up"
+        tools:layout="@layout/fragment_add_fuel_log" />
 
     <fragment
         android:id="@+id/singleDayRideFragment"

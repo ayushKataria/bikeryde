@@ -85,17 +85,34 @@ class RideDbHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
             )
             """.trimIndent()
         )
+        db.execSQL(FUEL_LOG_TABLE_SQL)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 7) {
             db.execSQL("ALTER TABLE ride ADD COLUMN title TEXT")
         }
+        if (oldVersion < 8) {
+            db.execSQL(FUEL_LOG_TABLE_SQL)
+        }
     }
 
     companion object {
         private const val DB_NAME = "bikeryde.db"
-        private const val DB_VERSION = 7
+        private const val DB_VERSION = 8
+
+        private const val FUEL_LOG_TABLE_SQL = """
+            CREATE TABLE IF NOT EXISTS fuel_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp INTEGER NOT NULL,
+                odo_km REAL NOT NULL,
+                liters_filled REAL NOT NULL,
+                cost REAL NOT NULL,
+                price_per_liter REAL NOT NULL,
+                mileage_since_last_km REAL,
+                notes TEXT
+            )
+        """
     }
 }
 

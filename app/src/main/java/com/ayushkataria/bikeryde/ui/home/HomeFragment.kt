@@ -25,7 +25,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
             findNavController().navigate(R.id.action_home_to_rideHistory)
         }
         bindCard(view, R.id.cardFuelLog, R.string.home_card_fuel_title, R.string.home_card_fuel_subtitle) {
-            navigateToComingSoon(R.string.home_card_fuel_title, R.string.coming_soon_desc_fuel)
+            findNavController().navigate(R.id.action_home_to_fuelLog)
         }
         bindCard(view, R.id.cardPlanning, R.string.home_card_planning_title, R.string.home_card_planning_subtitle) {
             navigateToComingSoon(R.string.home_card_planning_title, R.string.coming_soon_desc_planning)

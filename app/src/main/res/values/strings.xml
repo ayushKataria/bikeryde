@@ -66,6 +66,27 @@
     <string name="action_delete">Delete</string>
     <string name="home_settings_content_description">Settings</string>
 
+    <!-- Fuel log -->
+    <string name="fuel_log_empty">No fill-ups logged yet. Add one to start tracking mileage and cost.</string>
+    <string name="fuel_log_add_button">Add Fill-Up</string>
+    <string name="fuel_log_section_trend_mileage">Mileage Trend (km/l)</string>
+    <string name="fuel_log_section_history">History</string>
+    <string name="fuel_log_row_primary_format">₹%1$s · %2$s L</string>
+    <string name="fuel_log_row_date_format">%1$s · Odo %2$s km</string>
+    <string name="fuel_log_row_derived_format">₹%1$s/L · %2$s</string>
+    <string name="fuel_log_mileage_format">%1$s km/l</string>
+    <string name="fuel_log_mileage_unset">—</string>
+    <string name="fuel_delete_confirm_title">Delete fill-up?</string>
+    <string name="fuel_delete_confirm_message">This permanently deletes this fuel log entry.</string>
+    <string name="add_fuel_title">Add Fill-Up</string>
+    <string name="add_fuel_odo_hint">Odometer (km)</string>
+    <string name="add_fuel_liters_hint">Liters filled</string>
+    <string name="add_fuel_cost_hint">Total cost (₹)</string>
+    <string name="add_fuel_notes_hint">Notes (optional)</string>
+    <string name="add_fuel_invalid_input">Enter a valid odometer, liters, and cost</string>
+    <string name="add_fuel_odo_too_low">Odometer must be greater than your last fill-up (%1$s km)</string>
+    <string name="add_fuel_saved">Fill-up saved</string>
+
     <!-- Post-ride actions (shown after ending a single or multi-day ride) -->
     <string name="post_ride_create_image">Create Static Image</string>
     <string name="post_ride_create_animation">Create Animation</string>
@@ -114,7 +135,6 @@
     <string name="coming_soon_icon">🚧</string>
     <string name="coming_soon_label">Coming soon</string>
     <string name="coming_soon_desc_multi_day">Plan and track rides spanning multiple days, with per-day start/pause/end and a stitched trip summary.</string>
-    <string name="coming_soon_desc_fuel">Log odometer readings, liters, and cost at each fill-up, with mileage and cost trend charts.</string>
     <string name="coming_soon_desc_planning">Describe a destination and date range to get AI-assisted weather, food, sightseeing, and lodging suggestions.</string>
 
     <!-- Settings -->
