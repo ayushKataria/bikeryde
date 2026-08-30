@@ -15,8 +15,7 @@ Early development. Build order follows the phases in the spec doc:
 2. Multi-day tracking + video export
 3. Photo backgrounds + animation polish
 4. AI ride planning
-5. Navigation handoff
-6. Google Drive sync
+5. Google Drive sync
 
 ## Tech stack
 
@@ -26,7 +25,6 @@ Early development. Build order follows the phases in the spec doc:
 - `FusedLocationProviderClient` + `ForegroundService` for background GPS tracking
 - `MediaCodec` / Media3 Transformer for hardware-accelerated video rendering
 - MediaPipe LLM Inference API (Gemma) for on-device AI planning, with a cloud AI toggle
-- Google Maps SDK for Android (route preview), Intent handoff to the Google Maps app for navigation
 - Open-Meteo and OpenStreetMap Nominatim/Overpass for weather and places (free, no key required)
 - Google Drive REST API for optional multi-device sync
 
@@ -60,7 +58,7 @@ Early development. Build order follows the phases in the spec doc:
 
 This app does not ship with any default or shared API keys. On first launch you'll be asked to
 import existing data from Google Drive or start fresh and set up your own keys for the features
-you want (weather, places, maps, cloud AI). Each field in Settings links to instructions for
+you want (weather, places, cloud AI). Each field in Settings links to instructions for
 getting that provider's key — see the FAQ section in the design spec. Keys are stored locally via
 `EncryptedSharedPreferences` and are never logged or included in crash reports.
 
