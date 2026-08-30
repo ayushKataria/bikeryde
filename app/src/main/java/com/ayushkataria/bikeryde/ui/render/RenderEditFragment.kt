@@ -288,7 +288,16 @@ class RenderEditFragment : Fragment(R.layout.fragment_render_edit) {
             // Decode the thumbnail from the copy we just made, not the picker's uri — a photo
             // picker's content:// grant can fail to re-open by the time this runs, which
             // setImageURI(uri) swallows silently (leaving the slot blank instead of erroring).
-            val thumbnail = RenderImageStorage.decodeSampledBitmap(path, THUMBNAIL_SIZE_PX, THUMBNAIL_SIZE_PX)
+            val thumbnail = runCatching {
+                RenderImageStorage.decodeSampledBitmap(path, THUMBNAIL_SIZE_PX, THUMBNAIL_SIZE_PX)
+            }.getOrNull()
+            if (thumbnail == null) {
+                // Decoding failed (corrupt copy, unsupported format, oversized source) — treat this
+                // exactly like the copy failure above rather than silently recording a path that
+                // will fail to decode again, identically, when the actual render runs later.
+                Toast.makeText(requireContext(), R.string.render_image_failed, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
             val thumbnailView = when (target) {
                 is PickTarget.Cover -> {
                     coverImagePath = path
@@ -310,6 +319,9 @@ class RenderEditFragment : Fragment(R.layout.fragment_render_edit) {
             thumbnailView?.apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 setPadding(0, 0, 0, 0)
+                // The layout's app:tint (for the placeholder "+" icon) otherwise carries over and
+                // flattens the actual photo into a solid tinted block instead of showing it.
+                imageTintList = null
                 setImageBitmap(thumbnail)
             }
         }

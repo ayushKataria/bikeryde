@@ -35,6 +35,9 @@
     <string name="stop_action_resume">Resumed</string>
     <string name="stop_action_end">End</string>
     <string name="stop_legend_row_format">%1$s · %2$s · %3$s</string>
+    <string name="stop_rename_action">Rename stop</string>
+    <string name="stop_rename_dialog_title">Rename stop</string>
+    <string name="stop_rename_hint">Location name</string>
 
     <!-- Onboarding -->
     <string name="onboarding_title">Welcome to BikeRyde</string>
@@ -149,8 +152,6 @@
     <string name="settings_api_keys_hint">Bring your own keys. Missing a key just disables that feature — nothing is shared or proxied.</string>
     <string name="settings_key_places_label">Places / Geocoding (optional)</string>
     <string name="settings_key_places_helper">OpenStreetMap works with no key. Add a Google Places key for richer results.</string>
-    <string name="settings_key_maps_label">Maps SDK key</string>
-    <string name="settings_key_maps_helper">Google Cloud Console → enable Maps SDK for Android → create a key restricted to this app.</string>
     <string name="settings_key_cloud_ai_label">Cloud AI key (optional)</string>
     <string name="settings_key_cloud_ai_helper">console.anthropic.com → API Keys → Create Key.</string>
     <string name="settings_section_ai_mode">AI planning mode</string>

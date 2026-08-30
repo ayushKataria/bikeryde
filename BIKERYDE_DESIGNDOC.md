@@ -13,7 +13,8 @@ no backend, no hosting cost. Native Android app built in Kotlin.
 - Generate a static image or animated video for any ride, single or multi day
 - Multi-day videos show route, distance, time on road, and named stops (city/place)
 - Manual fuel log (odo, liters, cost) with mileage/cost trends
-- AI-assisted planning (weather, food/sightseeing/lodging suggestions) using local or cloud model
+- AI-assisted planning (weather, food/sightseeing/lodging suggestions placed along the actual
+  route) using local or cloud model
 - Zero backend, zero hosting cost — local storage + optional user-owned Google Drive sync
 - User brings their own API keys; app never holds or proxies shared credentials
 
@@ -52,11 +53,11 @@ no backend, no hosting cost. Native Android app built in Kotlin.
 │  └───────────────────┬─────────────────────┘              │
 └──────────────────────┼────────────────────────────────────┘
                        │
-     ┌─────────────────┼──────────────────┐
-     v                 v                  v
-Google Drive API   Weather/Places API   Cloud AI API
-(optional sync,     (BYO key or free    (BYO key,
- user's account)     tier)               optional)
+     ┌─────────────────┼──────────────────┬──────────────────┐
+     v                 v                  v                  v
+Google Drive API   Weather/Places API   Routing API       Cloud AI API
+(optional sync,     (BYO key or free    (OSRM/OpenRoute-  (BYO key,
+ user's account)     tier)               Service, free)    optional)
 ```
 
 No backend server anywhere — every external call is made directly from the device using the
@@ -80,6 +81,7 @@ user's own credentials, and native Android APIs are used directly with no cross-
 | Cloud AI (optional) | Retrofit/OkHttp client to Claude API (or user's chosen provider) | BYO key, toggle in settings |
 | Weather | Open-Meteo (free, no key) or BYO key provider | Retrofit client |
 | Places / geocoding | OpenStreetMap Nominatim/Overpass (free) or BYO Google Places key | |
+| Routing / directions | OSRM public server (free, no key) or BYO OpenRouteService key (free tier, higher limits) | Route geometry + cumulative distance between waypoints — lets planning place a suggestion "40km into the ride" rather than just "near the destination" |
 | Cloud sync (optional) | Google Drive REST API via Google Identity Services | File-scope OAuth, not app login |
 | Notifications | `NotificationCompat`, `WorkManager` for background render jobs | |
 | Networking | Retrofit + OkHttp | |
@@ -142,7 +144,7 @@ suggestions (JSON: food/sightseeing/lodging), generatedBy (LOCAL | CLOUD)
 
 **AppSettings** (DataStore, not Room, for key-value settings)
 ```
-apiKeys (weather, places, aiCloud) — stored via EncryptedSharedPreferences,
+apiKeys (weather, places, routing, aiCloud) — stored via EncryptedSharedPreferences,
 aiMode (LOCAL | CLOUD), driveSyncEnabled (Boolean), units (KM | MI)
 ```
 
@@ -184,15 +186,21 @@ aiMode (LOCAL | CLOUD), driveSyncEnabled (Boolean), units (KM | MI)
 - History screen with trend charts (cost over time, mileage over time)
 
 ### 5.5 AI-assisted ride planning
-- User describes a destination/date range; app fetches weather (date range) and nearby places (food, sightseeing, lodging) via the configured provider
-- That structured payload is handed to the AI model — a light RAG-style summarization/ranking task, not open-ended reasoning
-- **Local mode (default):** MediaPipe LLM Inference API running Gemma on-device, no network call for the AI step itself (weather/places calls still happen over the network)
+- User describes an origin/destination and date range; app fetches:
+  - the **route** between them (geometry + cumulative distance) from the routing provider — this
+    is what lets a suggestion be placed a specific distance *into* the ride (e.g. "a breakfast stop
+    ~40km in") rather than only near the endpoints
+  - **weather** for the date range, and **nearby places** (food, sightseeing, lodging) — searched
+    along the route's geometry, not just around the destination, so a stop can be suggested
+    partway through a long day's ride
+- That structured payload (route + weather + candidate places) is handed to the AI model — a light RAG-style summarization/ranking task (picking and placing good stops), not open-ended reasoning
+- **Local mode (default):** MediaPipe LLM Inference API running Gemma on-device, no network call for the AI step itself (routing/weather/places calls still happen over the network)
 - **Cloud mode (toggle):** sends the same structured payload to the user's configured cloud AI provider for a stronger answer
 
 ### 5.6 Onboarding & key management
 - First open: **Import from Google Drive** or **Start fresh**
   - Import: Google OAuth (file-scope only via Google Identity Services, not an app login) — pulls a previous export/sync file
-  - Start fresh: settings screen walkthrough where the user optionally adds their own keys (weather, places, cloud AI), each field linking to "how to get this key" instructions
+  - Start fresh: settings screen walkthrough where the user optionally adds their own keys (weather, places, routing, cloud AI), each field linking to "how to get this key" instructions
 - No default or shared keys anywhere. Missing a key disables only that specific feature
 - Keys stored via `EncryptedSharedPreferences`, never logged, never included in crash reports
 
@@ -248,4 +256,5 @@ Each entry below becomes an inline help card next to its key field in-app.
 
 - **Weather (Open-Meteo):** no key required for the free tier — nothing to set up
 - **Places / geocoding (OpenStreetMap):** no key required; optional Google Places key for richer POI data (Google Cloud Console → enable Places API → create API key)
+- **Routing (OSRM):** no key required — uses the public OSRM server; optional OpenRouteService key for higher rate limits (openrouteservice.org → sign up → Dashboard → Create key)
 - **Cloud AI (Claude API, optional):** console.anthropic.com → API Keys → Create Key

@@ -22,7 +22,6 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
     private lateinit var repository: SettingsRepository
 
     private lateinit var placesKeyInput: TextInputEditText
-    private lateinit var mapsKeyInput: TextInputEditText
     private lateinit var cloudAiKeyInput: TextInputEditText
     private lateinit var aiModeToggleGroup: MaterialButtonToggleGroup
     private lateinit var unitsToggleGroup: MaterialButtonToggleGroup
@@ -36,7 +35,6 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         view.findViewById<View>(R.id.topBarBack).setOnClickListener { findNavController().navigateUp() }
 
         placesKeyInput = view.findViewById(R.id.placesKeyInput)
-        mapsKeyInput = view.findViewById(R.id.mapsKeyInput)
         cloudAiKeyInput = view.findViewById(R.id.cloudAiKeyInput)
         aiModeToggleGroup = view.findViewById(R.id.aiModeToggleGroup)
         unitsToggleGroup = view.findViewById(R.id.unitsToggleGroup)
@@ -56,7 +54,6 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
 
     private fun bindSettings(settings: AppSettings) {
         placesKeyInput.setText(settings.apiKeys.placesKey.orEmpty())
-        mapsKeyInput.setText(settings.apiKeys.mapsKey.orEmpty())
         cloudAiKeyInput.setText(settings.apiKeys.cloudAiKey.orEmpty())
         aiModeToggleGroup.check(
             if (settings.aiMode == AiMode.CLOUD) R.id.aiModeCloudButton else R.id.aiModeLocalButton
@@ -70,7 +67,6 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
     private fun collectSettings(): AppSettings = AppSettings(
         apiKeys = ApiKeys(
             placesKey = placesKeyInput.text?.toString()?.trim()?.ifEmpty { null },
-            mapsKey = mapsKeyInput.text?.toString()?.trim()?.ifEmpty { null },
             cloudAiKey = cloudAiKeyInput.text?.toString()?.trim()?.ifEmpty { null }
         ),
         aiMode = if (aiModeToggleGroup.checkedButtonId == R.id.aiModeCloudButton) AiMode.CLOUD else AiMode.LOCAL,

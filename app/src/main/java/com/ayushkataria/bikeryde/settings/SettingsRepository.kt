@@ -14,7 +14,6 @@ class SettingsRepository(context: Context) {
     fun getSettings(): AppSettings = AppSettings(
         apiKeys = ApiKeys(
             placesKey = prefs.getString(KEY_PLACES, null),
-            mapsKey = prefs.getString(KEY_MAPS, null),
             cloudAiKey = prefs.getString(KEY_CLOUD_AI, null)
         ),
         aiMode = prefs.getString(KEY_AI_MODE, null)?.let { runCatching { AiMode.valueOf(it) }.getOrNull() }
@@ -27,7 +26,6 @@ class SettingsRepository(context: Context) {
     fun saveSettings(settings: AppSettings) {
         prefs.edit()
             .putString(KEY_PLACES, settings.apiKeys.placesKey)
-            .putString(KEY_MAPS, settings.apiKeys.mapsKey)
             .putString(KEY_CLOUD_AI, settings.apiKeys.cloudAiKey)
             .putString(KEY_AI_MODE, settings.aiMode.name)
             .putBoolean(KEY_DRIVE_SYNC, settings.driveSyncEnabled)
@@ -38,7 +36,6 @@ class SettingsRepository(context: Context) {
     companion object {
         private const val PREFS_NAME = "bikeryde_settings"
         private const val KEY_PLACES = "api_key_places"
-        private const val KEY_MAPS = "api_key_maps"
         private const val KEY_CLOUD_AI = "api_key_cloud_ai"
         private const val KEY_AI_MODE = "ai_mode"
         private const val KEY_DRIVE_SYNC = "drive_sync_enabled"

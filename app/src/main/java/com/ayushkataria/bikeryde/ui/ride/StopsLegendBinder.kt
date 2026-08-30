@@ -5,6 +5,7 @@ import android.content.res.ColorStateList
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
@@ -41,7 +42,12 @@ class StopsLegendBinder(private val context: Context, private val legendContaine
         RideEventAction.END -> context.getString(R.string.stop_action_end)
     }
 
-    fun render(events: List<RideEvent>) {
+    /**
+     * @param onRenameRequested when non-null, each row gets a small edit button that invokes this
+     *   with the tapped stop — used by [RideDetailFragment] to permanently rename a stop's place.
+     *   Left null on the live tracking screens, which stay read-only.
+     */
+    fun render(events: List<RideEvent>, onRenameRequested: ((RideEvent) -> Unit)? = null) {
         legendContainer.removeAllViews()
         events.forEach { event ->
             val row = LinearLayout(context).apply {
@@ -72,9 +78,28 @@ class StopsLegendBinder(private val context: Context, private val legendContaine
             }
             row.addView(dot)
             row.addView(label)
+            if (onRenameRequested != null) {
+                val editButton = ImageButton(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(dpToPx(32), dpToPx(32)).apply {
+                        marginStart = dpToPx(4)
+                    }
+                    setBackgroundResource(resolveSelectableItemBackgroundBorderless())
+                    setImageResource(R.drawable.ic_edit)
+                    contentDescription = context.getString(R.string.stop_rename_action)
+                    setPadding(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4))
+                    setOnClickListener { onRenameRequested(event) }
+                }
+                row.addView(editButton)
+            }
             legendContainer.addView(row)
         }
     }
 
     private fun dpToPx(dp: Int): Int = (dp * context.resources.displayMetrics.density).toInt()
+
+    private fun resolveSelectableItemBackgroundBorderless(): Int {
+        val typedValue = android.util.TypedValue()
+        context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, typedValue, true)
+        return typedValue.resourceId
+    }
 }

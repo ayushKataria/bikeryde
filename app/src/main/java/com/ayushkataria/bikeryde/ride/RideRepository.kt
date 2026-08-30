@@ -22,7 +22,7 @@ data class RideDaySession(val rideDayId: Long, val dayIndex: Int)
  */
 class RideRepository(context: Context) {
 
-    private val dbHelper = RideDbHelper(context.applicationContext)
+    private val dbHelper = RideDbHelper.getInstance(context)
 
     /** Starts a new single-day ride: creates the [Ride], its sole [RideDay], and a START [Stop]. */
     suspend fun startRide(startTime: Long, lat: Double?, lng: Double?, placeName: String?): RideSession =
@@ -301,7 +301,7 @@ class RideRepository(context: Context) {
     suspend fun getEvents(rideId: Long): List<RideEvent> = withContext(Dispatchers.IO) {
         dbHelper.readableDatabase.rawQuery(
             """
-            SELECT stop."action", stop.timestamp, stop.lat, stop.lng, stop.place_name
+            SELECT stop.id, stop."action", stop.timestamp, stop.lat, stop.lng, stop.place_name
             FROM stop
             JOIN ride_day ON stop.ride_day_id = ride_day.id
             WHERE ride_day.ride_id = ?
@@ -312,11 +312,12 @@ class RideRepository(context: Context) {
             val events = mutableListOf<RideEvent>()
             while (cursor.moveToNext()) {
                 events += RideEvent(
-                    action = RideEventAction.valueOf(cursor.getString(0)),
-                    timestamp = cursor.getLong(1),
-                    lat = if (cursor.isNull(2)) null else cursor.getDouble(2),
-                    lng = if (cursor.isNull(3)) null else cursor.getDouble(3),
-                    placeName = cursor.getString(4)
+                    id = cursor.getLong(0),
+                    action = RideEventAction.valueOf(cursor.getString(1)),
+                    timestamp = cursor.getLong(2),
+                    lat = if (cursor.isNull(3)) null else cursor.getDouble(3),
+                    lng = if (cursor.isNull(4)) null else cursor.getDouble(4),
+                    placeName = cursor.getString(5)
                 )
             }
             events
@@ -351,7 +352,7 @@ class RideRepository(context: Context) {
     suspend fun getEventsForDay(rideDayId: Long): List<RideEvent> = withContext(Dispatchers.IO) {
         dbHelper.readableDatabase.rawQuery(
             """
-            SELECT stop."action", stop.timestamp, stop.lat, stop.lng, stop.place_name
+            SELECT stop.id, stop."action", stop.timestamp, stop.lat, stop.lng, stop.place_name
             FROM stop
             WHERE stop.ride_day_id = ?
             ORDER BY stop.id ASC
@@ -361,11 +362,12 @@ class RideRepository(context: Context) {
             val events = mutableListOf<RideEvent>()
             while (cursor.moveToNext()) {
                 events += RideEvent(
-                    action = RideEventAction.valueOf(cursor.getString(0)),
-                    timestamp = cursor.getLong(1),
-                    lat = if (cursor.isNull(2)) null else cursor.getDouble(2),
-                    lng = if (cursor.isNull(3)) null else cursor.getDouble(3),
-                    placeName = cursor.getString(4)
+                    id = cursor.getLong(0),
+                    action = RideEventAction.valueOf(cursor.getString(1)),
+                    timestamp = cursor.getLong(2),
+                    lat = if (cursor.isNull(3)) null else cursor.getDouble(3),
+                    lng = if (cursor.isNull(4)) null else cursor.getDouble(4),
+                    placeName = cursor.getString(5)
                 )
             }
             events
@@ -462,6 +464,45 @@ class RideRepository(context: Context) {
             "id = ?",
             arrayOf(rideId.toString())
         )
+    }
+
+    /**
+     * Permanently changes a [Stop]'s recorded place name — unlike the render customize screen's
+     * per-stop name override (which only relabels that one rendered image/video), this rewrites
+     * the actual `stop` row, so the new name shows up everywhere the stop is displayed from now on.
+     * If the stop is a START or END, its [RideDay]'s denormalized start/end place name is kept in
+     * sync too, since the multi-day day list and render captions read from there, not from `stop`.
+     */
+    suspend fun renameStop(stopId: Long, placeName: String?) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val trimmed = placeName?.trim()?.takeIf { it.isNotEmpty() }
+        db.update(
+            "stop",
+            ContentValues().apply { put("place_name", trimmed) },
+            "id = ?",
+            arrayOf(stopId.toString())
+        )
+        db.rawQuery(
+            "SELECT ride_day_id, \"action\" FROM stop WHERE id = ?",
+            arrayOf(stopId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val rideDayId = cursor.getLong(0)
+                val column = when (RideEventAction.valueOf(cursor.getString(1))) {
+                    RideEventAction.START -> "start_place_name"
+                    RideEventAction.END -> "end_place_name"
+                    RideEventAction.PAUSE, RideEventAction.RESUME -> null
+                }
+                if (column != null) {
+                    db.update(
+                        "ride_day",
+                        ContentValues().apply { put(column, trimmed) },
+                        "id = ?",
+                        arrayOf(rideDayId.toString())
+                    )
+                }
+            }
+        }
     }
 
     /**

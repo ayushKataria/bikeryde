@@ -34,8 +34,10 @@ data class RidePoint(
     val speedMps: Float?
 )
 
-/** A start/pause/resume/end control action with its reverse-geocoded place name, for the route's stop markers. */
+/** A start/pause/resume/end control action with its reverse-geocoded place name, for the route's
+ * stop markers. [id] is the underlying `stop` row's id — needed to permanently rename its place. */
 data class RideEvent(
+    val id: Long,
     val action: RideEventAction,
     val timestamp: Long,
     val lat: Double?,

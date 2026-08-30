@@ -2,6 +2,8 @@ package com.ayushkataria.bikeryde.ui.ride
 
 import android.os.Bundle
 import android.view.View
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.os.bundleOf
@@ -10,12 +12,14 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.ayushkataria.bikeryde.R
 import com.ayushkataria.bikeryde.media.RenderType
+import com.ayushkataria.bikeryde.ride.RideEvent
 import com.ayushkataria.bikeryde.ride.RideEventAction
 import com.ayushkataria.bikeryde.ride.RideRepository
 import com.ayushkataria.bikeryde.ride.RideType
 import com.ayushkataria.bikeryde.ui.render.RenderLauncher
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -105,7 +109,7 @@ class RideDetailFragment : Fragment(R.layout.fragment_ride_detail) {
             stopsCountText.text = events.size.toString()
 
             routeMapView.submit(points, events)
-            legendBinder.render(events)
+            legendBinder.render(events, onRenameRequested = ::showRenameStopDialog)
 
             daysSection.visibility = if (ride.type == RideType.MULTI_DAY) View.VISIBLE else View.GONE
             if (ride.type == RideType.MULTI_DAY) {
@@ -114,6 +118,33 @@ class RideDetailFragment : Fragment(R.layout.fragment_ride_detail) {
                 days.forEach { day -> daysContainer.addView(MultiDayRowBinder.buildRow(requireContext(), daysContainer, day)) }
             }
         }
+    }
+
+    /** Permanently renames a stop's recorded place — rewrites the `stop` row itself (and its
+     * [com.ayushkataria.bikeryde.ride.RideDay]'s start/end place if this is a START or END stop),
+     * unlike the render customize screen's name override, which only relabels one rendered output. */
+    private fun showRenameStopDialog(event: RideEvent) {
+        val padding = (16 * resources.displayMetrics.density).toInt()
+        val input = EditText(requireContext()).apply {
+            setText(event.placeName)
+            hint = getString(R.string.stop_rename_hint)
+            setSelection(text.length)
+        }
+        val container = FrameLayout(requireContext()).apply {
+            setPadding(padding, padding / 2, padding, 0)
+            addView(input)
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.stop_rename_dialog_title)
+            .setView(container)
+            .setPositiveButton(R.string.action_save) { _, _ ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    repository.renameStop(event.id, input.text.toString())
+                    loadRide(requireView())
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun formatSpeed(kmh: Double): String =

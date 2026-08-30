@@ -13,7 +13,6 @@ enum class Units {
 /** BYO API keys for the optional external providers listed in the design doc's API key FAQ (§9). */
 data class ApiKeys(
     val placesKey: String? = null,
-    val mapsKey: String? = null,
     val cloudAiKey: String? = null
 )
 
