@@ -14,15 +14,16 @@ data class RenderStop(
     val lat: Double?,
     val lng: Double?,
     val displayName: String?,
-    val backgroundImagePath: String? = null
+    val backgroundImagePath: String? = null,
+    /** Which day this stop falls on — see [RenderDay.dayIndex]. */
+    val dayIndex: Int = 0
 )
 
 /**
  * One day's worth of route to draw. A single-day ride produces exactly one of these; a multi-day
- * ride will produce one per [com.ayushkataria.bikeryde.ride.RideDay] once multi-day tracking is
- * built — [RouteFrameDrawer] already stitches however many days it's given end to end, with a
- * label appearing at each day's start, so nothing about the drawing or encoding pipeline needs to
- * change to support multi-day.
+ * ride produces one per travel [com.ayushkataria.bikeryde.ride.RideDay] (rest days have no GPS
+ * track and so contribute none) — [RouteFrameDrawer] stitches however many it's given end to end
+ * and tags each day's start/end [RenderStop.displayName] with its day number.
  */
 data class RenderDay(
     val dayIndex: Int,

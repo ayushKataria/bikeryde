@@ -27,8 +27,8 @@ import com.ayushkataria.bikeryde.media.RenderRepository
 import com.ayushkataria.bikeryde.media.RenderType
 import com.ayushkataria.bikeryde.media.RideRenderDataAssembler
 import com.ayushkataria.bikeryde.media.StaticImageRenderer
-import com.ayushkataria.bikeryde.media.StopGrouping
 import com.ayushkataria.bikeryde.media.VideoDurationRecommender
+import com.ayushkataria.bikeryde.media.mergedStopsForRide
 import com.ayushkataria.bikeryde.media.VideoRenderWorker
 import com.ayushkataria.bikeryde.ride.RideEventAction
 import com.ayushkataria.bikeryde.ride.RideRepository
@@ -129,7 +129,7 @@ class RenderEditFragment : Fragment(R.layout.fragment_render_edit) {
 
     private fun loadStops() {
         viewLifecycleOwner.lifecycleScope.launch {
-            stops = StopGrouping.merge(repository.getEvents(rideId))
+            stops = mergedStopsForRide(repository, rideId)
             if (renderType == RenderType.VIDEO) {
                 recommendedDurationS = VideoDurationRecommender.recommend(stops.size)
                 updateVideoLengthPreview()

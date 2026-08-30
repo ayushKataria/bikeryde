@@ -323,6 +323,55 @@ class RideRepository(context: Context) {
         }
     }
 
+    /** A single day's logged GPS fixes, in recording order — used to render a multi-day ride's
+     * video/image one [com.ayushkataria.bikeryde.media.RenderDay] per actual [RideDay]. */
+    suspend fun getRoutePointsForDay(rideDayId: Long): List<RidePoint> = withContext(Dispatchers.IO) {
+        dbHelper.readableDatabase.query(
+            "gps_point",
+            arrayOf("lat", "lng", "speed"),
+            "ride_day_id = ?",
+            arrayOf(rideDayId.toString()),
+            null,
+            null,
+            "id ASC"
+        ).use { cursor ->
+            val points = mutableListOf<RidePoint>()
+            while (cursor.moveToNext()) {
+                points += RidePoint(
+                    lat = cursor.getDouble(0),
+                    lng = cursor.getDouble(1),
+                    speedMps = if (cursor.isNull(2)) null else cursor.getFloat(2)
+                )
+            }
+            points
+        }
+    }
+
+    /** A single day's start/pause/resume/end control actions, in chronological order. */
+    suspend fun getEventsForDay(rideDayId: Long): List<RideEvent> = withContext(Dispatchers.IO) {
+        dbHelper.readableDatabase.rawQuery(
+            """
+            SELECT stop."action", stop.timestamp, stop.lat, stop.lng, stop.place_name
+            FROM stop
+            WHERE stop.ride_day_id = ?
+            ORDER BY stop.id ASC
+            """.trimIndent(),
+            arrayOf(rideDayId.toString())
+        ).use { cursor ->
+            val events = mutableListOf<RideEvent>()
+            while (cursor.moveToNext()) {
+                events += RideEvent(
+                    action = RideEventAction.valueOf(cursor.getString(0)),
+                    timestamp = cursor.getLong(1),
+                    lat = if (cursor.isNull(2)) null else cursor.getDouble(2),
+                    lng = if (cursor.isNull(3)) null else cursor.getDouble(3),
+                    placeName = cursor.getString(4)
+                )
+            }
+            events
+        }
+    }
+
     /** The fastest single GPS fix recorded for a ride, in m/s — null if no fix reported a speed. */
     suspend fun getMaxSpeedMps(rideId: Long): Float? = withContext(Dispatchers.IO) {
         dbHelper.readableDatabase.rawQuery(

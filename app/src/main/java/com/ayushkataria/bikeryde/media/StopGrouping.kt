@@ -6,9 +6,12 @@ import com.ayushkataria.bikeryde.ride.RideEventAction
 /**
  * A Pause immediately followed by its Resume — the same physical stop, just opened and closed —
  * collapsed into one logical stop. [primaryAction] is always the Pause; [actions] is kept for
- * display ("Pause, Resume") on the customize screen.
+ * display ("Pause, Resume") on the customize screen. [dayIndex] is which [com.ayushkataria.bikeryde.ride.RideDay]
+ * this stop belongs to — always the same for every event folded into one group, since a merge never
+ * spans a day boundary (every day's own event sequence starts with START and ends with END).
  */
 data class MergedStop(
+    val dayIndex: Int,
     val primaryAction: RideEventAction,
     val actions: List<RideEventAction>,
     val timestamp: Long,
@@ -23,11 +26,12 @@ data class MergedStop(
  * is purely structural (adjacent Pause→Resume), never based on matching place names — a Pause that
  * happens to reverse-geocode to the same place as an earlier one (e.g. two separate stops back home
  * in the same city) is always its own stop. Both the edit screen and [RideRenderDataAssembler] must
- * use this same grouping so their stop indices line up.
+ * use this same grouping (via [mergedStopsForRide], which calls this once per day) so their stop
+ * indices line up.
  */
 object StopGrouping {
 
-    fun merge(stops: List<RideEvent>): List<MergedStop> {
+    fun merge(stops: List<RideEvent>, dayIndex: Int): List<MergedStop> {
         val result = mutableListOf<MergedStop>()
         for (stop in stops) {
             val last = result.lastOrNull()
@@ -37,6 +41,7 @@ object StopGrouping {
                 result[result.lastIndex] = last!!.copy(actions = last.actions + stop.action)
             } else {
                 result += MergedStop(
+                    dayIndex = dayIndex,
                     primaryAction = stop.action,
                     actions = listOf(stop.action),
                     timestamp = stop.timestamp,
