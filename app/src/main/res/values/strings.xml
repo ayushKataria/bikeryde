@@ -5,6 +5,8 @@
     <string name="notif_channel_name">Ride tracking</string>
     <string name="notif_ride_in_progress">Ride in progress</string>
     <string name="notif_ride_paused">Ride paused</string>
+    <string name="notif_still_riding_title">Still riding?</string>
+    <string name="notif_still_riding_message">No movement for a while — tap to keep tracking, or end your day.</string>
     <string name="status_idle">No ride in progress</string>
     <string name="status_tracking">Tracking</string>
     <string name="status_paused">Paused</string>
@@ -134,7 +136,6 @@
     <!-- Coming soon placeholder -->
     <string name="coming_soon_icon">🚧</string>
     <string name="coming_soon_label">Coming soon</string>
-    <string name="coming_soon_desc_multi_day">Plan and track rides spanning multiple days, with per-day start/pause/end and a stitched trip summary.</string>
     <string name="coming_soon_desc_planning">Describe a destination and date range to get AI-assisted weather, food, sightseeing, and lodging suggestions.</string>
 
     <!-- Settings -->
@@ -158,4 +159,26 @@
     <string name="settings_sync_coming_soon">Google Drive sync is coming soon.</string>
     <string name="settings_save">Save</string>
     <string name="settings_saved_confirmation">Settings saved</string>
+
+    <!-- Multi-day ride tracking -->
+    <string name="multi_day_idle_message">Track a trip spanning more than one day — start it once, then start/finish each day as you go.</string>
+    <string name="action_start_trip">Start Trip</string>
+    <string name="label_time_on_road_today">Time on Road Today</string>
+    <string name="label_distance_today">Distance Today</string>
+    <string name="action_finish_day">Finish Day</string>
+    <string name="action_log_rest_day">Log Rest Day</string>
+    <string name="action_end_trip">End Trip</string>
+    <string name="action_start_day_format">Start Day %1$d</string>
+    <string name="day_label_format">Day %1$d</string>
+    <string name="section_trip_so_far">Trip So Far</string>
+    <string name="label_total_distance">Total Distance</string>
+    <string name="section_days">Days</string>
+    <string name="day_row_travel_format">%1$s → %2$s</string>
+    <string name="day_row_travel_stats_format">%1$s · %2$s</string>
+    <string name="day_row_rest_title">Rest day</string>
+    <string name="end_trip_confirm_title">End trip?</string>
+    <string name="end_trip_confirm_message">This closes out the whole multi-day trip and saves it to your ride history.</string>
+    <string name="log_rest_day_confirm_title">Log a rest day?</string>
+    <string name="log_rest_day_confirm_message">Marks today as a day spent at your current stop, with no riding — for a rest day or sightseeing.</string>
+    <string name="multi_day_permission_required">Location permission is required to track your trip.</string>
 </resources>

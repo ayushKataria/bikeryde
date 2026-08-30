@@ -10,6 +10,9 @@ import kotlinx.coroutines.withContext
 /** Ids returned once a ride (and its first [RideDay]) have been created. */
 data class RideSession(val rideId: Long, val rideDayId: Long)
 
+/** Id and [RideDay.dayIndex] of a newly-started day within an existing multi-day trip. */
+data class RideDaySession(val rideDayId: Long, val dayIndex: Int)
+
 /**
  * Owns all reads/writes of ride data. Every method does its SQLite work on [Dispatchers.IO];
  * callers (the tracking service, the activity) stay on the main thread.
@@ -36,39 +39,132 @@ class RideRepository(context: Context) {
                     put("total_duration_s", 0L)
                 }
             )
-            val rideDayId = db.insert(
-                "ride_day",
-                null,
-                ContentValues().apply {
-                    put("ride_id", rideId)
-                    put("day_index", 0)
-                    put("day_type", RideDayType.TRAVEL.name)
-                    put("start_time", startTime)
-                    put("start_place_name", placeName)
-                    put("distance_km", 0.0)
-                    put("duration_s", 0L)
-                }
-            )
-            insertStop(db, rideDayId, RideEventAction.START, startTime, lat, lng, placeName)
+            val rideDayId = insertTravelDay(db, rideId, 0, startTime, lat, lng, placeName)
             RideSession(rideId, rideDayId)
         }
+
+    /**
+     * Starts a new multi-day trip: creates the [Ride] (type [RideType.MULTI_DAY]), its first
+     * [RideDay] (index 0), and a START [Stop] — the "Start Trip" action from design doc §5.2.
+     */
+    suspend fun startTrip(startTime: Long, lat: Double?, lng: Double?, placeName: String?): RideSession =
+        withContext(Dispatchers.IO) {
+            val db = dbHelper.writableDatabase
+            val rideId = db.insert(
+                "ride",
+                null,
+                ContentValues().apply {
+                    put("type", RideType.MULTI_DAY.name)
+                    put("start_time", startTime)
+                    put("status", RideStatus.TRACKING.name)
+                    put("total_distance_m", 0.0)
+                    put("total_duration_s", 0L)
+                }
+            )
+            val rideDayId = insertTravelDay(db, rideId, nextDayIndex(db, rideId), startTime, lat, lng, placeName)
+            RideSession(rideId, rideDayId)
+        }
+
+    /**
+     * Begins the next day of an already-started trip — a new TRAVEL [RideDay] (the next available
+     * [RideDay.dayIndex]) plus a START [Stop]. The trip's [Ride] row already exists, so unlike
+     * [startTrip] there's nothing to create there.
+     */
+    suspend fun startNextDay(rideId: Long, startTime: Long, lat: Double?, lng: Double?, placeName: String?): RideDaySession =
+        withContext(Dispatchers.IO) {
+            val db = dbHelper.writableDatabase
+            val dayIndex = nextDayIndex(db, rideId)
+            val rideDayId = insertTravelDay(db, rideId, dayIndex, startTime, lat, lng, placeName)
+            RideDaySession(rideDayId, dayIndex)
+        }
+
+    /**
+     * Closes out today's [RideDay] without ending the trip — design doc §5.2's "Pause day (end of
+     * riding for that day)". The [Ride] itself stays [RideStatus.TRACKING]; the rider taps
+     * [startNextDay] whenever they're ready to continue, which may be the next morning.
+     */
+    suspend fun finishDay(
+        rideDayId: Long,
+        timestamp: Long,
+        lat: Double?,
+        lng: Double?,
+        placeName: String?,
+        distanceM: Double,
+        durationS: Long
+    ) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        finalizeDay(db, rideDayId, timestamp, placeName, distanceM, durationS)
+        insertStop(db, rideDayId, RideEventAction.END, timestamp, lat, lng, placeName)
+    }
+
+    /**
+     * Ends the whole multi-day trip: finalizes today's still-open [RideDay] (same as [finishDay])
+     * and marks the [Ride] itself [RideStatus.COMPLETED], with totals summed fresh across every
+     * [RideDay] — not carried over in memory — since the tracking service may have been recreated
+     * between days and so never held a running total spanning the whole trip.
+     */
+    suspend fun endTrip(
+        rideId: Long,
+        rideDayId: Long,
+        timestamp: Long,
+        lat: Double?,
+        lng: Double?,
+        placeName: String?,
+        todayDistanceM: Double,
+        todayDurationS: Long
+    ) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        finalizeDay(db, rideDayId, timestamp, placeName, todayDistanceM, todayDurationS)
+        insertStop(db, rideDayId, RideEventAction.END, timestamp, lat, lng, placeName)
+
+        val (totalDistanceM, totalDurationS) = tripTotals(db, rideId)
+        db.update(
+            "ride",
+            ContentValues().apply {
+                put("end_time", timestamp)
+                put("status", RideStatus.COMPLETED.name)
+                put("total_distance_m", totalDistanceM)
+                put("total_duration_s", totalDurationS)
+            },
+            "id = ?",
+            arrayOf(rideId.toString())
+        )
+    }
+
+    /**
+     * Ends a multi-day trip when no day is currently open — the rider taps "End Trip" between
+     * days rather than right after finishing one. There's no in-progress day to finalize here
+     * (unlike [endTrip]), so this is just a status flip with totals summed across the days already
+     * on record.
+     */
+    suspend fun completeTripWithNoOpenDay(rideId: Long, timestamp: Long) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val (totalDistanceM, totalDurationS) = tripTotals(db, rideId)
+        db.update(
+            "ride",
+            ContentValues().apply {
+                put("end_time", timestamp)
+                put("status", RideStatus.COMPLETED.name)
+                put("total_distance_m", totalDistanceM)
+                put("total_duration_s", totalDurationS)
+            },
+            "id = ?",
+            arrayOf(rideId.toString())
+        )
+    }
 
     /**
      * Records a [RideDayType.NOT_TRAVEL] day within a multi-day [Ride] — a rest or tourism day
      * spent at the current stop, with no GPS track or [Stop]s of its own.
      */
-    suspend fun addNotTravelDay(
-        rideId: Long,
-        dayIndex: Int,
-        date: Long,
-        placeName: String?
-    ): Long = withContext(Dispatchers.IO) {
-        dbHelper.writableDatabase.insert(
+    suspend fun addNotTravelDay(rideId: Long, date: Long, placeName: String?): Long = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.insert(
             "ride_day",
             null,
             ContentValues().apply {
                 put("ride_id", rideId)
-                put("day_index", dayIndex)
+                put("day_index", nextDayIndex(db, rideId))
                 put("day_type", RideDayType.NOT_TRAVEL.name)
                 put("start_time", date)
                 put("end_time", date)
@@ -78,6 +174,29 @@ class RideRepository(context: Context) {
                 put("duration_s", 0L)
             }
         )
+    }
+
+    /** The trip's distance/duration so far, summed across every already-finalized [RideDay] — a
+     * day still open (in progress) contributes 0 here until it's closed via [finishDay]/[endTrip],
+     * so a caller showing a live "trip so far" figure adds the current day's live counters on top. */
+    suspend fun getTripTotalsSoFar(rideId: Long): Pair<Double, Long> = withContext(Dispatchers.IO) {
+        tripTotals(dbHelper.readableDatabase, rideId)
+    }
+
+    /** The most recent multi-day trip still in TRACKING or PAUSED state, if any — lets the multi-day
+     * screen re-derive where a trip stands from the database alone, since a trip can easily span an
+     * app restart (or several) between days. */
+    suspend fun getActiveTrip(): Ride? = withContext(Dispatchers.IO) {
+        dbHelper.readableDatabase.query(
+            "ride",
+            null,
+            "type = ? AND status IN (?, ?)",
+            arrayOf(RideType.MULTI_DAY.name, RideStatus.TRACKING.name, RideStatus.PAUSED.name),
+            null,
+            null,
+            "id DESC",
+            "1"
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.toRide() else null }
     }
 
     suspend fun pauseRide(
@@ -128,17 +247,7 @@ class RideRepository(context: Context) {
             "id = ?",
             arrayOf(rideId.toString())
         )
-        db.update(
-            "ride_day",
-            ContentValues().apply {
-                put("end_time", timestamp)
-                put("end_place_name", placeName)
-                put("distance_km", totalDistanceM / 1000.0)
-                put("duration_s", totalDurationS)
-            },
-            "id = ?",
-            arrayOf(rideDayId.toString())
-        )
+        finalizeDay(db, rideDayId, timestamp, placeName, totalDistanceM, totalDurationS)
         insertStop(db, rideDayId, RideEventAction.END, timestamp, lat, lng, placeName)
     }
 
@@ -342,6 +451,66 @@ class RideRepository(context: Context) {
         }
 
         renderPaths.forEach { path -> runCatching { java.io.File(path).delete() } }
+    }
+
+    /** One past the highest [RideDay.dayIndex] recorded for a ride so far, or 0 for its first day. */
+    private fun nextDayIndex(db: SQLiteDatabase, rideId: Long): Int = db.rawQuery(
+        "SELECT MAX(day_index) FROM ride_day WHERE ride_id = ?", arrayOf(rideId.toString())
+    ).use { cursor -> if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getInt(0) + 1 else 0 }
+
+    private fun insertTravelDay(
+        db: SQLiteDatabase,
+        rideId: Long,
+        dayIndex: Int,
+        startTime: Long,
+        lat: Double?,
+        lng: Double?,
+        placeName: String?
+    ): Long {
+        val rideDayId = db.insert(
+            "ride_day",
+            null,
+            ContentValues().apply {
+                put("ride_id", rideId)
+                put("day_index", dayIndex)
+                put("day_type", RideDayType.TRAVEL.name)
+                put("start_time", startTime)
+                put("start_place_name", placeName)
+                put("distance_km", 0.0)
+                put("duration_s", 0L)
+            }
+        )
+        insertStop(db, rideDayId, RideEventAction.START, startTime, lat, lng, placeName)
+        return rideDayId
+    }
+
+    private fun finalizeDay(
+        db: SQLiteDatabase,
+        rideDayId: Long,
+        timestamp: Long,
+        placeName: String?,
+        distanceM: Double,
+        durationS: Long
+    ) {
+        db.update(
+            "ride_day",
+            ContentValues().apply {
+                put("end_time", timestamp)
+                put("end_place_name", placeName)
+                put("distance_km", distanceM / 1000.0)
+                put("duration_s", durationS)
+            },
+            "id = ?",
+            arrayOf(rideDayId.toString())
+        )
+    }
+
+    private fun tripTotals(db: SQLiteDatabase, rideId: Long): Pair<Double, Long> = db.rawQuery(
+        "SELECT COALESCE(SUM(distance_km), 0), COALESCE(SUM(duration_s), 0) FROM ride_day WHERE ride_id = ?",
+        arrayOf(rideId.toString())
+    ).use { cursor ->
+        cursor.moveToFirst()
+        (cursor.getDouble(0) * 1000.0) to cursor.getLong(1)
     }
 
     private fun setStatus(db: SQLiteDatabase, rideId: Long, status: RideStatus) {

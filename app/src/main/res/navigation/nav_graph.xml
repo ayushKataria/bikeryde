@@ -39,7 +39,16 @@
         <action
             android:id="@+id/action_home_to_fuelLog"
             app:destination="@id/fuelLogFragment" />
+        <action
+            android:id="@+id/action_home_to_multiDayRide"
+            app:destination="@id/multiDayRideFragment" />
     </fragment>
+
+    <fragment
+        android:id="@+id/multiDayRideFragment"
+        android:name="com.ayushkataria.bikeryde.ui.ride.MultiDayRideFragment"
+        android:label="Multi-Day Ride"
+        tools:layout="@layout/fragment_multi_day_ride" />
 
     <fragment
         android:id="@+id/fuelLogFragment"

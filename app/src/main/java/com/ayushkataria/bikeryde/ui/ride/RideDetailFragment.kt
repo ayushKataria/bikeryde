@@ -12,6 +12,7 @@ import com.ayushkataria.bikeryde.R
 import com.ayushkataria.bikeryde.media.RenderType
 import com.ayushkataria.bikeryde.ride.RideEventAction
 import com.ayushkataria.bikeryde.ride.RideRepository
+import com.ayushkataria.bikeryde.ride.RideType
 import com.ayushkataria.bikeryde.ui.render.RenderLauncher
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
@@ -39,6 +40,8 @@ class RideDetailFragment : Fragment(R.layout.fragment_ride_detail) {
     private lateinit var stopsLegend: LinearLayout
     private lateinit var createImageButton: MaterialButton
     private lateinit var createAnimationButton: MaterialButton
+    private lateinit var daysSection: View
+    private lateinit var daysContainer: LinearLayout
 
     private var rideId: Long = -1L
 
@@ -60,6 +63,8 @@ class RideDetailFragment : Fragment(R.layout.fragment_ride_detail) {
         stopsLegend = view.findViewById(R.id.stopsLegend)
         createImageButton = view.findViewById(R.id.createImageButton)
         createAnimationButton = view.findViewById(R.id.createAnimationButton)
+        daysSection = view.findViewById(R.id.daysSection)
+        daysContainer = view.findViewById(R.id.daysContainer)
 
         legendBinder = StopsLegendBinder(requireContext(), stopsLegend)
         routeMapView.setRouteColor(MaterialColors.getColor(routeMapView, com.google.android.material.R.attr.colorPrimary))
@@ -101,6 +106,13 @@ class RideDetailFragment : Fragment(R.layout.fragment_ride_detail) {
 
             routeMapView.submit(points, events)
             legendBinder.render(events)
+
+            daysSection.visibility = if (ride.type == RideType.MULTI_DAY) View.VISIBLE else View.GONE
+            if (ride.type == RideType.MULTI_DAY) {
+                val days = repository.getRideDays(rideId)
+                daysContainer.removeAllViews()
+                days.forEach { day -> daysContainer.addView(MultiDayRowBinder.buildRow(requireContext(), daysContainer, day)) }
+            }
         }
     }
 

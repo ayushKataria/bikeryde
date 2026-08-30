@@ -35,6 +35,11 @@
             android:foregroundServiceType="location" />
 
         <service
+            android:name=".ride.MultiDayRideTrackingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
