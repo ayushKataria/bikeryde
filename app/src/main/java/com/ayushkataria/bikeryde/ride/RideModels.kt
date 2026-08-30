@@ -48,7 +48,9 @@ data class RideUiState(
     val distanceM: Double = 0.0,
     val durationS: Long = 0L,
     /** Wall-clock time from ride start to now (or to end, once completed) — unlike [durationS], this includes pauses. */
-    val totalTimeS: Long = 0L
+    val totalTimeS: Long = 0L,
+    /** True while a start/pause/resume/end action is in flight (GPS fix + reverse geocode + DB write) — the UI should disable ride controls and show a loading indicator while this is true, so a slow network/GPS fix can't be double-tapped into duplicate actions. */
+    val isBusy: Boolean = false
 ) {
     val isActive: Boolean get() = status == RideStatus.TRACKING || status == RideStatus.PAUSED
 }

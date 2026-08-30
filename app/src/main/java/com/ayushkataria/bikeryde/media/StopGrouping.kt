@@ -4,10 +4,9 @@ import com.ayushkataria.bikeryde.ride.RideEvent
 import com.ayushkataria.bikeryde.ride.RideEventAction
 
 /**
- * A run of consecutive [RideEvent]s recorded at the same place — e.g. a Start immediately followed
- * by a Pause at the same spot — collapsed into one logical stop. [primaryAction] (the first action
- * in the run) decides the marker color; [actions] is kept for display ("Start, Paused") on the
- * customize screen.
+ * A Pause immediately followed by its Resume — the same physical stop, just opened and closed —
+ * collapsed into one logical stop. [primaryAction] is always the Pause; [actions] is kept for
+ * display ("Pause, Resume") on the customize screen.
  */
 data class MergedStop(
     val primaryAction: RideEventAction,
@@ -19,10 +18,12 @@ data class MergedStop(
 )
 
 /**
- * Merges consecutive stops sharing the same recorded place name so a quick Start-then-Pause (or
- * Pause-then-Resume) at one spot becomes a single editable/renderable stop instead of two
- * overlapping markers and two identically-named rows on the customize screen. Both the edit screen
- * and [RideRenderDataAssembler] must use this same grouping so their stop indices line up.
+ * Merges each Pause with the Resume that immediately follows it, so pausing and resuming becomes a
+ * single editable/renderable stop instead of two markers/rows for the same physical stop. Grouping
+ * is purely structural (adjacent Pause→Resume), never based on matching place names — a Pause that
+ * happens to reverse-geocode to the same place as an earlier one (e.g. two separate stops back home
+ * in the same city) is always its own stop. Both the edit screen and [RideRenderDataAssembler] must
+ * use this same grouping so their stop indices line up.
  */
 object StopGrouping {
 
@@ -30,8 +31,10 @@ object StopGrouping {
         val result = mutableListOf<MergedStop>()
         for (stop in stops) {
             val last = result.lastOrNull()
-            if (last != null && placesMatch(last.placeName, stop.placeName)) {
-                result[result.lastIndex] = last.copy(actions = last.actions + stop.action)
+            val closesLastPause = stop.action == RideEventAction.RESUME &&
+                last != null && last.actions.last() == RideEventAction.PAUSE
+            if (closesLastPause) {
+                result[result.lastIndex] = last!!.copy(actions = last.actions + stop.action)
             } else {
                 result += MergedStop(
                     primaryAction = stop.action,
@@ -45,7 +48,4 @@ object StopGrouping {
         }
         return result
     }
-
-    private fun placesMatch(a: String?, b: String?): Boolean =
-        a != null && b != null && a.trim().equals(b.trim(), ignoreCase = true)
 }

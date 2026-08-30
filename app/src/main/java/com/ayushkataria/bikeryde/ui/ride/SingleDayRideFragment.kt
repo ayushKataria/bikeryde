@@ -40,6 +40,7 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
     private lateinit var activeActionsRow: LinearLayout
     private lateinit var pauseResumeButton: MaterialButton
     private lateinit var endButton: MaterialButton
+    private lateinit var actionProgress: com.google.android.material.progressindicator.CircularProgressIndicator
     private lateinit var postRideActionsRow: LinearLayout
     private lateinit var createImageButton: MaterialButton
     private lateinit var createAnimationButton: MaterialButton
@@ -86,6 +87,7 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
         activeActionsRow = view.findViewById(R.id.activeActionsRow)
         pauseResumeButton = view.findViewById(R.id.pauseResumeButton)
         endButton = view.findViewById(R.id.endButton)
+        actionProgress = view.findViewById(R.id.actionProgress)
         postRideActionsRow = view.findViewById(R.id.postRideActionsRow)
         createImageButton = view.findViewById(R.id.createImageButton)
         createAnimationButton = view.findViewById(R.id.createAnimationButton)
@@ -124,6 +126,7 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
     }
 
     private fun onStartClicked() {
+        if (pendingStart || RideTrackingState.state.value.isBusy) return
         val context = requireContext()
         val permissionsNeeded = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -141,6 +144,7 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
     }
 
     private fun onPauseResumeClicked() {
+        if (RideTrackingState.state.value.isBusy) return
         when (RideTrackingState.state.value.status) {
             RideStatus.TRACKING -> RideTrackingService.pause(requireContext())
             RideStatus.PAUSED -> RideTrackingService.resume(requireContext())
@@ -149,6 +153,7 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
     }
 
     private fun onEndClicked() {
+        if (RideTrackingState.state.value.isBusy) return
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.end_ride_confirm_title)
             .setMessage(R.string.end_ride_confirm_message)
@@ -185,6 +190,11 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
             pauseResumeButton.setIconResource(R.drawable.ic_pause)
         }
 
+        startButton.isEnabled = !state.isBusy
+        pauseResumeButton.isEnabled = !state.isBusy
+        endButton.isEnabled = !state.isBusy
+        actionProgress.visibility = if (state.isBusy) View.VISIBLE else View.GONE
+
         val rideId = state.rideId
         currentRideId = rideId
         rideStatsSection.visibility = if (rideId != null) View.VISIBLE else View.GONE
@@ -206,7 +216,8 @@ class SingleDayRideFragment : Fragment(R.layout.fragment_single_day_ride) {
     private fun refreshRideStats(rideId: Long, distanceM: Double, durationS: Long) {
         viewLifecycleOwner.lifecycleScope.launch {
             val points = repository.getRoutePoints(rideId)
-            val events = repository.getEvents(rideId)
+            // A Resume shares its Pause's location and isn't a new stop of its own — see StopGrouping.
+            val events = repository.getEvents(rideId).filterNot { it.action == RideEventAction.RESUME }
             val maxSpeedMps = repository.getMaxSpeedMps(rideId)
 
             routeMapView.submit(points, events)

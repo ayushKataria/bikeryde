@@ -57,6 +57,8 @@ class RideTrackingService : Service() {
     private var isTracking = false
     private var lastLocation: Location? = null
     private var tickerJob: Job? = null
+    /** True while a start/pause/resume/end request is in flight — blocks re-entrancy from a rapid double-tap while GPS/geocoding is slow. */
+    private var isBusy = false
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -95,7 +97,8 @@ class RideTrackingService : Service() {
     }
 
     private fun onStart() {
-        if (rideId != null) return
+        if (rideId != null || isBusy) return
+        setBusy(true)
         startForegroundWithNotification(statusText = getString(R.string.notif_ride_in_progress))
         distanceM = 0.0
         accumulatedDurationS = 0L
@@ -110,6 +113,7 @@ class RideTrackingService : Service() {
             rideId = session.rideId
             rideDayId = session.rideDayId
             rideStartTimeMs = startTimeMs
+            isBusy = false
             publishState()
         }
         startLocationUpdates()
@@ -119,7 +123,8 @@ class RideTrackingService : Service() {
     private fun onPause() {
         val id = rideId ?: return
         val dayId = rideDayId ?: return
-        if (!isTracking) return
+        if (!isTracking || isBusy) return
+        setBusy(true)
         stopLocationUpdates()
         accumulatedDurationS += elapsedSegmentSeconds()
         isTracking = false
@@ -129,6 +134,7 @@ class RideTrackingService : Service() {
             val location = lastLocation ?: getLastKnownLocation()
             val placeName = reverseGeocode(location)
             repository.pauseRide(id, dayId, System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
+            isBusy = false
             publishState()
         }
     }
@@ -136,7 +142,8 @@ class RideTrackingService : Service() {
     private fun onResume() {
         val id = rideId ?: return
         val dayId = rideDayId ?: return
-        if (isTracking) return
+        if (isTracking || isBusy) return
+        setBusy(true)
         val locationAtResume = lastLocation
         lastLocation = null
         isTracking = true
@@ -148,6 +155,7 @@ class RideTrackingService : Service() {
             val location = locationAtResume ?: getLastKnownLocation()
             val placeName = reverseGeocode(location)
             repository.resumeRide(id, dayId, System.currentTimeMillis(), location?.latitude, location?.longitude, placeName)
+            isBusy = false
             publishState()
         }
     }
@@ -155,6 +163,8 @@ class RideTrackingService : Service() {
     private fun onEnd() {
         val id = rideId ?: return
         val dayId = rideDayId ?: return
+        if (isBusy) return
+        setBusy(true)
         if (isTracking) {
             accumulatedDurationS += elapsedSegmentSeconds()
         }
@@ -179,6 +189,7 @@ class RideTrackingService : Service() {
                 totalDistanceM = finalDistance,
                 totalDurationS = finalDuration
             )
+            isBusy = false
             RideTrackingState.update(
                 RideUiState(
                     rideId = id,
@@ -194,6 +205,12 @@ class RideTrackingService : Service() {
             stopForegroundCompat()
             stopSelf()
         }
+    }
+
+    /** Immediately reflects an in-flight action in [RideTrackingState] without waiting for [publishState] (which needs a [rideId] that may not exist yet, e.g. mid-start). */
+    private fun setBusy(busy: Boolean) {
+        isBusy = busy
+        RideTrackingState.update(RideTrackingState.state.value.copy(isBusy = busy))
     }
 
     private suspend fun getLastKnownLocation(): Location? {
@@ -248,7 +265,8 @@ class RideTrackingService : Service() {
                 status = if (isTracking) RideStatus.TRACKING else RideStatus.PAUSED,
                 distanceM = distanceM,
                 durationS = liveDuration,
-                totalTimeS = liveTotalTime
+                totalTimeS = liveTotalTime,
+                isBusy = isBusy
             )
         )
     }
